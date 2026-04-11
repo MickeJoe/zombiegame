@@ -1,0 +1,106 @@
+# =========================
+# Unreal Engine
+# =========================
+
+# Binaries
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Ignore all files in Content except source assets you explicitly track
+# (Usually you DO want to keep Content, so comment this if needed)
+# Content/*
+
+# Ignore cooked data
+Saved/Cooked/
+Saved/StagedBuilds/
+
+# Logs
+Saved/Logs/
+*.log
+
+# Autosaves
+Saved/Autosaves/
+
+# Crash reports
+Saved/Crashes/
+
+# =========================
+# Unreal specific files
+# =========================
+
+*.opensdf
+*.sdf
+*.sln
+*.suo
+*.xcodeproj
+*.xcworkspace
+
+# Generated project files
+.vs/
+.vscode/
+.idea/
+
+# Rider
+*.sln.iml
+
+# Visual Studio
+*.VC.db
+*.VC.opendb
+
+# =========================
+# OS files
+# =========================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Mac
+.DS_Store
+
+# =========================
+# Compiled source
+# =========================
+
+*.dll
+*.exe
+*.obj
+*.pdb
+*.lib
+*.exp
+
+# =========================
+# Unreal Build Tool
+# =========================
+
+*.Target.cs.json
+
+# =========================
+# Temporary files
+# =========================
+
+*.tmp
+*.temp
+
+# =========================
+# Python / tools (if any)
+# =========================
+
+__pycache__/
+*.pyc
+
+# =========================
+# Node (if tools/scripts)
+# =========================
+
+node_modules/
+
+# =========================
+# Optional: ignore large cache artifacts
+# =========================
+
+DerivedDataCache/*
