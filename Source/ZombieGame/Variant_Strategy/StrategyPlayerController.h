@@ -6,6 +6,8 @@
 #include "GameFramework/PlayerController.h"
 #include "StrategyPlayerController.generated.h"
 
+class AGridHighlightActor;
+class AGridManager;
 class AStrategyPawn;
 class UInputMappingContext;
 class UNiagaraSystem;
@@ -300,4 +302,15 @@ protected:
 
 	/** Detects taps and double taps for mobile platforms. */
 	void CheckTouchTap(bool& bTapped, bool& bDoubleTapped);
+	
+	void UpdateMovementHighlights();	
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
+	TObjectPtr<AGridHighlightActor> HighlightActor;
+
+	UPROPERTY(Transient)
+	TArray<FIntPoint> ReachableCells;
+	
+	UPROPERTY(Transient)
+	AGridManager* GridManager;
 };

@@ -21,8 +21,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Units")
 	TSubclassOf<AStrategyUnit> StrategyUnitClass;
 private:
-
-
 	UPROPERTY(Transient)
 	TArray<AStrategyUnit*> PlayerUnitArray;
+	
 };
