@@ -16,11 +16,20 @@
 #include "StrategyUnit.h"
 #include "NavigationSystem.h"
 #include "Engine/OverlapResult.h"
+#include "Systems/GridManager.h"
 
 AStrategyPlayerController::AStrategyPlayerController()
 {
 	// mouse cursor should always be shown
 	bShowMouseCursor = true;
+
+	GridManager = Cast<AGridManager>(
+		UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
+	);
+
+	HighlightActor = Cast<AGridHighlightActor>(
+	UGameplayStatics::GetActorOfClass(this, AGridHighlightActor::StaticClass())
+	);
 }
 
 void AStrategyPlayerController::SetupInputComponent()
@@ -220,7 +229,12 @@ void AStrategyPlayerController::SelectHoldCompleted(const FInputActionValue& Val
 
 void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 {
-
+	/*
+	if (HighlightActor)
+	{
+		HighlightActor->ClearReachableHighlights();
+	}
+*/
 	if (GetLocationUnderCursor(CachedSelection))
 	{
 		DoSelectionCommand();
@@ -447,6 +461,11 @@ void AStrategyPlayerController::DoSelectionCommand()
 				// tell the unit it's been deselected
 				TargetUnit->UnitDeselected();
 
+				if (HighlightActor)
+				{
+					HighlightActor->ClearReachableHighlights();
+				}
+
 			}
 			else
 			{
@@ -456,6 +475,8 @@ void AStrategyPlayerController::DoSelectionCommand()
 
 				// tell the unit it's been selected
 				TargetUnit->UnitSelected();
+
+//				UpdateMovementHighlights();
 
 			}
 		}
@@ -472,6 +493,8 @@ void AStrategyPlayerController::DoSelectionCommand()
 		}
 
 	}
+	
+	UpdateMovementHighlights();
 }
 
 void AStrategyPlayerController::DoSelectAllOnScreenCommand()
@@ -508,14 +531,19 @@ void AStrategyPlayerController::DoSelectAllOnScreenCommand()
 
 void AStrategyPlayerController::DoDeselectAllCommand()
 {
+	if (HighlightActor)
+	{
+		HighlightActor->ClearReachableHighlights();
+	}
 
+	TargetUnit = nullptr;
+	
 	// tell each controlled unit it's been deselected
 	for (AStrategyUnit* CurrentUnit : ControlledUnits)
 	{
 		// ensure the unit hasn't been destroyed
 		if (IsValid(CurrentUnit))
 		{
-
 			CurrentUnit->UnitDeselected();
 		}
 	}
@@ -593,9 +621,23 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 
 			// stop the unit
 			CurrentUnit->StopMoving();
+			
+			FIntPoint ClickedCell = GridManager->WorldToGrid(CurrentMoveGoal);
+
+			if (!ReachableCells.Contains(ClickedCell))
+			{
+				return;
+			}
+/*
+			if (!GridManager->IsCellWalkable(ClickedCell))
+			{
+				return;
+			}
+			*/
+			FVector MoveGoal = GridManager->GridToWorld(ClickedCell);
 
 			// move the lead unit to the goal, all other units to random navigable points around it
-			FVector MoveGoal = CurrentMoveGoal;
+//			FVector MoveGoal = CurrentMoveGoal;
 
 			if (CurrentUnit != Closest)
 			{
@@ -606,8 +648,13 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			// subscribe to the unit's move completed delegate
 			CurrentUnit->OnMoveCompleted.AddDynamic(this, &AStrategyPlayerController::OnMoveCompleted);
 
+			if (HighlightActor)
+			{
+				HighlightActor->ClearReachableHighlights();
+			}
+			
 			// set up movement to the goal location
-			if (!CurrentUnit->MoveToLocation(MoveGoal, InteractionRadius * 0.66f))
+			if (!CurrentUnit->MoveToLocation(MoveGoal, 0.0f/*InteractionRadius * 0.66f*/))
 			{
 				// the move request failed, so flag it
 				bInteractionFailed = true;
@@ -814,4 +861,33 @@ void AStrategyPlayerController::CheckTouchTap(bool& bTapped, bool& bDoubleTapped
 
 	// save the tap release time
 	LastTapReleaseTime = GameTime;
+}
+
+// Exempel i StrategyPlayerController.cpp
+
+void AStrategyPlayerController::UpdateMovementHighlights()
+{
+	if (!GridManager || !HighlightActor || !TargetUnit)
+	{
+		return;
+	}
+	
+	const FIntPoint UnitCell = GridManager->WorldToGrid(TargetUnit->GetActorLocation());
+
+	// Exempel: enkel diamond range, byt senare mot riktig pathfinding-cost
+	const int32 MaxMove = TargetUnit->GetMaxMovement();
+
+	for (int32 Y = -MaxMove; Y <= MaxMove; ++Y)
+	{
+		for (int32 X = -MaxMove; X <= MaxMove; ++X)
+		{
+			const int32 Dist = FMath::Abs(X) + FMath::Abs(Y);
+			if (Dist <= MaxMove)
+			{
+				ReachableCells.Add(FIntPoint(UnitCell.X + X, UnitCell.Y + Y));
+			}
+		}
+	}
+
+	HighlightActor->ShowReachableCells(GridManager, ReachableCells);
 }

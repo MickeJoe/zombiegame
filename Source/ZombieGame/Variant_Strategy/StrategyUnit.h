@@ -58,6 +58,12 @@ public:
 	/** Attempts to move this unit to its */
 	bool MoveToLocation(const FVector& Location, float AcceptanceRadius);
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	int32 MaxMovement = 8;
+
+	UFUNCTION(BlueprintPure, Category = "Movement")
+	int32 GetMaxMovement() const { return MaxMovement; }
+
 protected:
 
 	/** called by the AI controller when this unit has finished moving */
