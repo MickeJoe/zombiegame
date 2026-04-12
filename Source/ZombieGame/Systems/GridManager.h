@@ -5,6 +5,11 @@
 #include "GridHighlightActor.h"
 #include "GridManager.generated.h"
 
+class AStrategyUnit;
+
+class UNavigationSystemV1;
+class ANavigationData;
+
 UCLASS()
 class AGridManager : public AActor
 {
@@ -49,21 +54,38 @@ public:
 	FIntPoint WorldToGrid(const FVector& WorldLocation) const;
 	FVector GridToWorld(const FIntPoint& GridCoord) const;
 
-	// GridManager.h
-
-	void ShowReachableCells(const TArray<FIntPoint>& Cells);
-	void ClearReachableCells();
-
 	UFUNCTION(BlueprintCallable, Category="Grid")
 	bool ProjectCellToGround(const FIntPoint& Cell, FVector& OutLocation, FVector& OutNormal) const;
 
+	bool TryGetNavigationDataForCell(
+		const FIntPoint& Cell,
+		UNavigationSystemV1*& OutNavSys,
+		const ANavigationData*& OutNavData,
+		FNavLocation& OutProjectedEnd
+	) const;
+
+
+
+	bool IsCellOnNavMesh(
+		const FIntPoint& Cell,
+		FNavLocation* OutLocation
+	) const;
+/*
+	bool IsCellReachableFromUnit(
+		const AStrategyUnit* Unit,
+		const FIntPoint& Cell
+	) const;
+*/
+	bool IsCellWithinMoveRange(
+		const AStrategyUnit* Unit,
+		const FIntPoint& Cell,
+		int32 MaxMoveCells
+	) const;
+	
 private:
 	void DrawGrid(bool bPersistent, float LifeTime) const;
 	void FlushGridDebugLines() const;
-
-//	UPROPERTY(EditDefaultsOnly, Category = "Grid|Highlight")
-//	TSubclassOf<class AGridCellHighlight> ReachableHighlightClass;
-
+	
 	UPROPERTY()
 	TArray<AActor*> SpawnedHighlights;
 };

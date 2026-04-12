@@ -882,9 +882,16 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 		for (int32 X = -MaxMove; X <= MaxMove; ++X)
 		{
 			const int32 Dist = FMath::Abs(X) + FMath::Abs(Y);
-			if (Dist <= MaxMove)
+			if (Dist > MaxMove)
 			{
-				ReachableCells.Add(FIntPoint(UnitCell.X + X, UnitCell.Y + Y));
+				continue;
+			}
+
+			const FIntPoint TestCell(UnitCell.X + X, UnitCell.Y + Y);
+
+			if (GridManager->IsCellWithinMoveRange(TargetUnit, TestCell, MaxMove))
+			{
+				ReachableCells.Add(TestCell);
 			}
 		}
 	}
