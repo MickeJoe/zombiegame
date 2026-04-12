@@ -272,6 +272,7 @@ bool AGridManager::IsCellReachableFromUnit(
     return NavSys->TestPathSync(Query, EPathFindingMode::Regular);
 }
 */
+/*
 bool AGridManager::IsCellWithinMoveRange(
     const AStrategyUnit* Unit,
     const FIntPoint& Cell,
@@ -322,4 +323,53 @@ bool AGridManager::IsCellWithinMoveRange(
     );
 
     return bWithinRange;
+}
+*/
+bool AGridManager::IsCellWithinMoveRange(
+    const AStrategyUnit* Unit,
+    const FIntPoint& Cell,
+    int32 MaxMoveCells
+) const
+{
+    if (!Unit)
+    {
+        return false;
+    }
+
+    UNavigationSystemV1* NavSys = nullptr;
+    const ANavigationData* NavData = nullptr;
+    FNavLocation ProjectedEnd;
+
+    if (!TryGetNavigationDataForCell(Cell, NavSys, NavData, ProjectedEnd))
+    {
+        return false;
+    }
+
+    const FVector Start = Unit->GetActorLocation();
+
+    // 🔴 1. Först: finns det en riktig path?
+    FPathFindingQuery Query(Unit, *NavData, Start, ProjectedEnd.Location);
+
+    if (!NavSys->TestPathSync(Query))
+    {
+        return false; // ← STOPPA här
+    }
+
+    // 🔵 2. Sen: kolla längd
+    FVector::FReal PathLength = 0.0;
+    const auto Result = NavSys->GetPathLength(
+        Start,
+        ProjectedEnd.Location,
+        PathLength,
+        NavData
+    );
+
+    if (Result != ENavigationQueryResult::Success)
+    {
+        return false;
+    }
+
+    const float MaxMoveDistanceWorld = MaxMoveCells * CellSize;
+
+    return PathLength <= MaxMoveDistanceWorld;
 }
