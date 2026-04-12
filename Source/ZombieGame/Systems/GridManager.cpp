@@ -1,6 +1,13 @@
 #include "GridManager.h"
+#include "StrategyUnit.h"
+
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+
+// Nav
+#include "NavigationSystem.h"
+#include "NavFilters/NavigationQueryFilter.h"
+#include "AI/NavigationSystemBase.h"
 
 AGridManager::AGridManager()
 {
@@ -167,44 +174,152 @@ bool AGridManager::ProjectCellToGround(const FIntPoint& Cell, FVector& OutLocati
     return true;
 }
 
-void AGridManager::ClearReachableCells()
+bool AGridManager::IsCellOnNavMesh(
+    const FIntPoint& Cell,
+    FNavLocation* OutLocation
+) const
 {
-    for (AActor* Highlight : SpawnedHighlights)
+    UWorld* World = GetWorld();
+    if (!World)
     {
-        if (Highlight)
-        {
-            Highlight->Destroy();
-        }
+        return false;
     }
 
-    SpawnedHighlights.Empty();
+    UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+    if (!NavSys)
+    {
+        return false;
+    }
+
+    const FVector WorldPos = GridToWorld(Cell);
+    const FVector QueryExtent(50.f, 50.f, 200.f);
+
+    FNavLocation Projected;
+
+    if (!NavSys->ProjectPointToNavigation(WorldPos, Projected, QueryExtent))
+    {
+        return false;
+    }
+
+    if (OutLocation)
+    {
+        *OutLocation = Projected;
+    }
+
+    return true;
 }
 
-void AGridManager::ShowReachableCells(const TArray<FIntPoint>& Cells)
+bool AGridManager::TryGetNavigationDataForCell(
+    const FIntPoint& Cell,
+    UNavigationSystemV1*& OutNavSys,
+    const ANavigationData*& OutNavData,
+    FNavLocation& OutProjectedEnd
+) const
 {
-    /*
-    ClearReachableCells();
+    OutNavSys = nullptr;
+    OutNavData = nullptr;
 
-    if (!ReachableHighlightClass)
+    UWorld* World = GetWorld();
+    if (!World)
     {
-        return;
+        return false;
     }
 
-    for (const FIntPoint& Cell : Cells)
+    UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+    if (!NavSys)
     {
-        FVector WorldPos = GridToWorld(Cell);
-        WorldPos.Z += 2.0f; // slightly above ground
-
-        AActor* Highlight = GetWorld()->SpawnActor<AActor>(
-            ReachableHighlightClass,
-            WorldPos,
-            FRotator(-90.f, 0.f, 0.f) // depends on mesh orientation
-        );
-
-        if (Highlight)
-        {
-            SpawnedHighlights.Add(Highlight);
-        }
+        return false;
     }
-    */
+
+    if (!IsCellOnNavMesh(Cell, &OutProjectedEnd))
+    {
+        return false;
+    }
+
+    const ANavigationData* NavData = NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+    if (!NavData)
+    {
+        return false;
+    }
+
+    OutNavSys = NavSys;
+    OutNavData = NavData;
+    return true;
+}
+/*
+bool AGridManager::IsCellReachableFromUnit(
+    const AStrategyUnit* Unit,
+    const FIntPoint& Cell
+) const
+{
+    if (!Unit)
+    {
+        return false;
+    }
+
+    UNavigationSystemV1* NavSys = nullptr;
+    const ANavigationData* NavData = nullptr;
+    FNavLocation ProjectedEnd;
+
+    if (!TryGetNavigationDataForCell(Cell, NavSys, NavData, ProjectedEnd))
+    {
+        return false;
+    }
+
+    const FVector Start = Unit->GetActorLocation();
+    FPathFindingQuery Query(Unit, *NavData, Start, ProjectedEnd.Location);
+
+    return NavSys->TestPathSync(Query, EPathFindingMode::Regular);
+}
+*/
+bool AGridManager::IsCellWithinMoveRange(
+    const AStrategyUnit* Unit,
+    const FIntPoint& Cell,
+    int32 MaxMoveCells
+) const
+{
+    if (!Unit)
+    {
+        return false;
+    }
+
+    UNavigationSystemV1* NavSys = nullptr;
+    const ANavigationData* NavData = nullptr;
+    FNavLocation ProjectedEnd;
+
+    if (!TryGetNavigationDataForCell(Cell, NavSys, NavData, ProjectedEnd))
+    {
+        return false;
+    }
+
+    const FVector Start = Unit->GetActorLocation();
+
+    FVector::FReal PathLength = 0.0;
+    const ENavigationQueryResult::Type Result = NavSys->GetPathLength(
+        Start,
+        ProjectedEnd.Location,
+        PathLength,
+        NavData
+    );
+
+    if (Result != ENavigationQueryResult::Success)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[MoveRange] Path failed for Cell (%d,%d)"), Cell.X, Cell.Y);
+        return false;
+    }
+
+    const float MaxMoveDistanceWorld = static_cast<float>(MaxMoveCells) * CellSize;
+    const bool bWithinRange = PathLength <= MaxMoveDistanceWorld;
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("[MoveRange] UnitPos=%s Cell=(%d,%d) CellWorld=%s PathLength=%.1f MaxWorld=%.1f Result=%s"),
+        *Start.ToString(),
+        Cell.X, Cell.Y,
+        *ProjectedEnd.Location.ToString(),
+        PathLength,
+        MaxMoveDistanceWorld,
+        bWithinRange ? TEXT("YES") : TEXT("NO")
+    );
+
+    return bWithinRange;
 }
