@@ -63,6 +63,11 @@ void AStrategyUnit::StopMoving()
 
 void AStrategyUnit::UnitSelected()
 {
+	if (StrategyUnitTeam != EStrategyUnitTeam::Human)
+	{
+		return;
+	}
+	
 	// pass control to BP
 	BP_UnitSelected();
 }
@@ -143,4 +148,14 @@ void AStrategyUnit::OnMoveFinished(FAIRequestID RequestID, const FPathFollowingR
 {
 	// call the delegate
 	OnMoveCompleted.Broadcast(this);
+}
+
+void AStrategyUnit::SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam)
+{
+	StrategyUnitTeam = InStrategyUnitTeam;
+}
+
+EStrategyUnitTeam AStrategyUnit::GetStrategyUnitTeam() const
+{
+	return StrategyUnitTeam;
 }

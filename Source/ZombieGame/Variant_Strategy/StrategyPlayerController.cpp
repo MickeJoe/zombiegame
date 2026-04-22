@@ -15,8 +15,14 @@
 #include "Kismet/GameplayStatics.h"
 #include "StrategyUnit.h"
 #include "NavigationSystem.h"
+#include "StrategyGameMode.h"
 #include "Engine/OverlapResult.h"
 #include "Systems/GridManager.h"
+#include "Blueprint/UserWidget.h"
+
+#include "UI/EndTurnWidget.h"
+
+PRAGMA_DISABLE_OPTIMIZATION
 
 AStrategyPlayerController::AStrategyPlayerController()
 {
@@ -30,6 +36,60 @@ AStrategyPlayerController::AStrategyPlayerController()
 	HighlightActor = Cast<AGridHighlightActor>(
 	UGameplayStatics::GetActorOfClass(this, AGridHighlightActor::StaticClass())
 	);
+}
+
+void AStrategyPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (IsLocalController() && TurnBannerWidgetClass)
+	{
+		TurnBannerWidget = CreateWidget<UTurnBannerWidget>(this, TurnBannerWidgetClass);
+		if (TurnBannerWidget)
+		{
+			TurnBannerWidget->AddToViewport(100);
+		}
+	}
+
+	if (EndTurnWidgetClass)
+	{
+		EndTurnWidget = CreateWidget<UEndTurnWidget>(this, EndTurnWidgetClass);
+		if (EndTurnWidget)
+		{
+			EndTurnWidget->AddToViewport(999);
+
+			EndTurnWidget->OnEndTurnClicked.AddDynamic(
+				this,
+				&AStrategyPlayerController::HandleEndTurnClicked
+			);
+		}
+	}
+
+	if (auto* GM = GetWorld()->GetAuthGameMode<AStrategyGameMode>())
+	{
+		GM->OnMatchReady.Broadcast();
+	}
+}
+
+void AStrategyPlayerController::HandleEndTurnClicked()
+{
+	if (AStrategyGameMode* GM = GetWorld()->GetAuthGameMode<AStrategyGameMode>())
+	{
+		GM->EndTurn();
+	}
+}
+
+void AStrategyPlayerController::ShowTurnBanner(ETurnOwner TurnOwner)
+{
+	if (TurnBannerWidget)
+	{
+		TurnBannerWidget->ShowTurnBanner(TurnOwner);
+	}
+}
+
+void AStrategyPlayerController::SetPlayerEndTurnButtonEnabled(bool bIsEnabledIn)
+{
+	EndTurnWidget->SetPlayerEndTurnButtonEnabled(bIsEnabledIn);
 }
 
 void AStrategyPlayerController::SetupInputComponent()
@@ -448,7 +508,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 		// update the target unit
 		TargetUnit = Cast<AStrategyUnit>(OutHit.GetActor());
 
-		if (TargetUnit)
+		if (TargetUnit && IsSelectableUnit(TargetUnit))
 		{
 
 			// is the unit already in the controlled list?
@@ -479,6 +539,10 @@ void AStrategyPlayerController::DoSelectionCommand()
 //				UpdateMovementHighlights();
 
 			}
+		}
+		else
+		{
+			TargetUnit = nullptr;
 		}
 
 	}
@@ -871,6 +935,8 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	{
 		return;
 	}
+
+	ReachableCells.Empty();
 	
 	const FIntPoint UnitCell = GridManager->WorldToGrid(TargetUnit->GetActorLocation());
 
@@ -898,3 +964,10 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 
 	HighlightActor->ShowReachableCells(GridManager, ReachableCells);
 }
+
+bool AStrategyPlayerController::IsSelectableUnit(const AStrategyUnit* Unit) const
+{
+	return Unit && Unit->GetStrategyUnitTeam() == EStrategyUnitTeam::Human;
+}
+
+PRAGMA_ENABLE_OPTIMIZATION

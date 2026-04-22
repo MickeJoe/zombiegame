@@ -7,7 +7,15 @@
 #include "AIController.h"
 #include "StrategyUnit.generated.h"
 
+class AStrategySide;
 class USphereComponent;
+
+UENUM(BlueprintType)
+enum class EStrategyUnitTeam : uint8
+{
+	Human,
+	AI
+};
 
 /** Delegate to report that this unit has finished moving */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitMoveCompletedDelegate, AStrategyUnit*, Unit);
@@ -64,10 +72,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Movement")
 	int32 GetMaxMovement() const { return MaxMovement; }
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
+	TObjectPtr<AStrategySide> OwningSide = nullptr;
+
+	void SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam);
+	EStrategyUnitTeam GetStrategyUnitTeam() const;
+
 protected:
 
 	/** called by the AI controller when this unit has finished moving */
 	void OnMoveFinished(FAIRequestID RequestID, const FPathFollowingResult& Result);
+
+	EStrategyUnitTeam StrategyUnitTeam;
 
 protected:
 
