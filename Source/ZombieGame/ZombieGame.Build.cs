@@ -34,6 +34,12 @@ public class ZombieGame : ModuleRules
 			"ZombieGame/Variant_TwinStick/Gameplay",
 			"ZombieGame/Variant_TwinStick/UI"
 		});
+		
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"Slate",
+			"SlateCore"
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

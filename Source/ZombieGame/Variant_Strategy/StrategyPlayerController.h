@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "UI/TurnBannerWidget.h"
 #include "StrategyPlayerController.generated.h"
 
 class AGridHighlightActor;
@@ -15,6 +16,7 @@ struct FInputActionValue;
 class AStrategyHUD;
 class AStrategyNPC;
 class UInputAction;
+class UEndTurnWidget;
 
 /** Enum to determine the last used input type */
 UENUM(BlueprintType)
@@ -33,6 +35,14 @@ UCLASS(abstract)
 class AStrategyPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+public:
+	virtual void BeginPlay() override;
+
+	UFUNCTION(BlueprintCallable)
+	void ShowTurnBanner(ETurnOwner TurnOwner);
+
+	void SetPlayerEndTurnButtonEnabled(bool bIsEnabledIn);	
 
 protected:
 
@@ -208,6 +218,21 @@ public:
 
 protected:
 
+	UPROPERTY(EditDefaultsOnly, Category="UI")
+	TSubclassOf<UTurnBannerWidget> TurnBannerWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UTurnBannerWidget> TurnBannerWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category="UI")
+	TSubclassOf<UEndTurnWidget> EndTurnWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UEndTurnWidget> EndTurnWidget;
+
+	UFUNCTION()
+	void HandleEndTurnClicked();
+	
 	/** Moves the camera by the given input */
 	void MoveCamera(const FInputActionValue& Value);
 
@@ -303,7 +328,8 @@ protected:
 	/** Detects taps and double taps for mobile platforms. */
 	void CheckTouchTap(bool& bTapped, bool& bDoubleTapped);
 	
-	void UpdateMovementHighlights();	
+	void UpdateMovementHighlights();
+	bool IsSelectableUnit(const AStrategyUnit* Unit) const;	
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
 	TObjectPtr<AGridHighlightActor> HighlightActor;
