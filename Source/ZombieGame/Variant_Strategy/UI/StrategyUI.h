@@ -29,9 +29,12 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category="UI", meta = (DisplayName="Update Units Count"))
 	void BP_UpdateUnitsCount();
 
+
 protected:
 
 	/** Returns the number of units selected */
 	UFUNCTION(BlueprintPure, Category="UI")
 	int32 GetSelectedUnitsCount() { return SelectedUnitCount; }
+
+
 };
