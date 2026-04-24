@@ -11,6 +11,8 @@
 #include "StrategyUnit.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "Player/PlayerStrategySide.h"
+#include "Player/AIStrategySide.h"
 
 #include "ZombieGame/Variant_Strategy/StrategyUnit.h"
 
@@ -25,23 +27,15 @@ void AStrategyGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	TArray<AActor*> FoundSides;
-	UGameplayStatics::GetAllActorsOfClass(this, AStrategySide::StaticClass(), FoundSides);
-
-	for (AActor* Actor : FoundSides)
-	{
-		if (AStrategySide* Side = Cast<AStrategySide>(Actor))
-		{
-			RegisterSide(Side);
-		}
-	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
+	PlayerSide = World->SpawnActor<APlayerStrategySide>(PlayerSideClass);
+	EnemySide = World->SpawnActor<AAIStrategySide>(EnemySideClass);
+	
 	SetupSpawnPoints();
 	SpawnUnits();
 //	StartMatchFlow();
@@ -89,6 +83,7 @@ void AStrategyGameMode::SpawnUnits()
 			Params);
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::Human);
+		PlayerSide->AddUnit(Unit);
 
 		UE_LOG(LogTemp, Warning, TEXT("Player unit spawned: %s"),
 			Unit ? *Unit->GetName() : TEXT("FAILED"));
@@ -102,12 +97,13 @@ void AStrategyGameMode::SpawnUnits()
 			Params);
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::AI);
+		EnemySide->AddUnit(Unit);
 
 		UE_LOG(LogTemp, Warning, TEXT("Enemy unit spawned: %s"),
 			Unit ? *Unit->GetName() : TEXT("FAILED"));
 	}
 }
-
+/*
 void AStrategyGameMode::RegisterSide(AStrategySide* Side)
 {
 	if (!Side)
@@ -120,7 +116,7 @@ void AStrategyGameMode::RegisterSide(AStrategySide* Side)
 		Sides.Add(Side);
 	}
 }
-
+*/
 void AStrategyGameMode::RegisterUnitToSide(AStrategyUnit* Unit, AStrategySide* Side)
 {
 	if (!Unit || !Side)
@@ -134,46 +130,34 @@ void AStrategyGameMode::RegisterUnitToSide(AStrategyUnit* Unit, AStrategySide* S
 
 AStrategySide* AStrategyGameMode::GetActiveSide() const
 {
-	if (!Sides.IsValidIndex(ActiveSideIndex))
+	if (ActiveSide == EActiveSide::Player)
 	{
-		return nullptr;
+		return PlayerSide;
 	}
-
-	return Sides[ActiveSideIndex];
-}
-
-bool AStrategyGameMode::IsHumanPlayersTurn() const
-{
-	const AStrategySide* ActiveSide = GetActiveSide();
-	return ActiveSide && ActiveSide->IsHuman();
+	return EnemySide;
 }
 
 void AStrategyGameMode::StartMatchFlow()
 {
-	if (Sides.Num() == 0)
-	{
-		return;
-	}
-
-	ActiveSideIndex = 0;
+	ActiveSide = EActiveSide::Player;
 	StartTurn();
 }
 
 void AStrategyGameMode::StartTurn()
 {
-	AStrategySide* ActiveSide = GetActiveSide();
-	if (!ActiveSide)
+	AStrategySide* ActiveStrategySide = GetActiveSide();
+	if (!ActiveStrategySide)
 	{
 		return;
 	}
 
 	if (AStrategyPlayerController* PC = Cast<AStrategyPlayerController>(GetWorld()->GetFirstPlayerController()))
 	{
-		PC->ShowTurnBanner(ActiveSide->IsAI() ? ETurnOwner::Enemy : ETurnOwner::Player);
+		PC->ShowTurnBanner(ActiveStrategySide->IsAI() ? ETurnOwner::Enemy : ETurnOwner::Player);
 	}
 
-	OnActiveSideChanged.Broadcast(ActiveSide);
-	ActiveSide->TakeTurn();
+	OnActiveSideChanged.Broadcast(ActiveStrategySide);
+	ActiveStrategySide->TakeTurn();
 }
 
 void AStrategyGameMode::EndTurn()
@@ -189,23 +173,12 @@ void AStrategyGameMode::EndTurn()
 
 void AStrategyGameMode::AdvanceToNextSide()
 {
-	if (Sides.Num() == 0)
+	if (ActiveSide == EActiveSide::Player)
 	{
-		ActiveSideIndex = INDEX_NONE;
+		ActiveSide = EActiveSide::AI;
 		return;
 	}
-
-	for (int32 Offset = 1; Offset <= Sides.Num(); ++Offset)
-	{
-		const int32 NextIndex = (ActiveSideIndex + Offset) % Sides.Num();
-		AStrategySide* Candidate = Sides[NextIndex];
-
-		if (IsValid(Candidate) /*&& Candidate->HasLivingUnits()*/)
-		{
-			ActiveSideIndex = NextIndex;
-			return;
-		}
-	}
+	ActiveSide = EActiveSide::Player;
 }
 
 bool AStrategyGameMode::IsBattleOver() const

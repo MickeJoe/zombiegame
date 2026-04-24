@@ -652,7 +652,6 @@ void AStrategyPlayerController::DoDragScrollCommand()
 
 void AStrategyPlayerController::DoMoveUnitsCommand()
 {
-
 	// set the movement goal
 	FVector CurrentMoveGoal;
 
@@ -682,6 +681,10 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 	{
 		if (IsValid(CurrentUnit))
 		{
+			if (CurrentUnit->GetRemainingActionPoints() < 1)
+			{
+				continue;
+			}
 
 			// stop the unit
 			CurrentUnit->StopMoving();
@@ -722,6 +725,11 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			{
 				// the move request failed, so flag it
 				bInteractionFailed = true;
+			}
+			else
+			{
+				const int32 MoveCost = 1;
+				CurrentUnit->UseAtionPoints(MoveCost);
 			}
 		}
 
@@ -932,6 +940,11 @@ void AStrategyPlayerController::CheckTouchTap(bool& bTapped, bool& bDoubleTapped
 void AStrategyPlayerController::UpdateMovementHighlights()
 {
 	if (!GridManager || !HighlightActor || !TargetUnit)
+	{
+		return;
+	}
+
+	if (TargetUnit->GetRemainingActionPoints() < 1)
 	{
 		return;
 	}

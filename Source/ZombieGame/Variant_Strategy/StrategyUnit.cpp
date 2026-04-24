@@ -159,3 +159,18 @@ EStrategyUnitTeam AStrategyUnit::GetStrategyUnitTeam() const
 {
 	return StrategyUnitTeam;
 }
+
+void AStrategyUnit::UseAtionPoints(int32 ActionPoints)
+{
+	UsedActionPoints += ActionPoints;
+}
+
+void AStrategyUnit::ResetActionPoints()
+{
+	UsedActionPoints = 0;
+}
+
+int32 AStrategyUnit::GetRemainingActionPoints() const
+{
+	return MaxActionPoints - UsedActionPoints;	
+}

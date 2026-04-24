@@ -100,6 +100,15 @@ protected:
 	void BP_InteractionBehavior(AStrategyUnit* Interactor);
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Strategy")
+	int32 MaxActionPoints = 2;
+
+	void UseAtionPoints(int32 ActionPoints);
+	int32 GetRemainingActionPoints() const;
+	void ResetActionPoints();
 
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
+
+protected:
+	int32 UsedActionPoints = 0;
 };

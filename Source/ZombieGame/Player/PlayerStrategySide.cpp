@@ -1,6 +1,7 @@
 ﻿#include "PlayerStrategySide.h"
 
 #include "../Variant_Strategy/StrategyPlayerController.h"
+#include "../Variant_Strategy/StrategyUnit.h"
 
 class AStrategyPlayerController;
 
@@ -12,6 +13,11 @@ void APlayerStrategySide::TakeTurn()
 	{
 		PC->SetPlayerEndTurnButtonEnabled(true);
 	}
+
+	for (TObjectPtr<AStrategyUnit> UnitPtr : Units)
+	{
+		UnitPtr->ResetActionPoints();
+	}	
 }
 
 bool APlayerStrategySide::IsHuman() const
