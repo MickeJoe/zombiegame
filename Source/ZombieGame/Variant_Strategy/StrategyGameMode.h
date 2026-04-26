@@ -116,5 +116,6 @@ private:
 	TArray<AStrategySpawnPoint*> EnemySpawns;
 	
 protected:
-	
+	FTransform GetProjectedSpawnTransform(
+		const AStrategySpawnPoint* Spawn) const;
 };
