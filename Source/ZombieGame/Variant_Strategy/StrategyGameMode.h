@@ -15,6 +15,7 @@
 class AStrategySpawnPoint;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMatchReady);
 
+class ASightManager;
 class AStrategySide;
 class AAIStrategySide;
 class APlayerStrategySide;
@@ -39,6 +40,9 @@ public:
 	
 protected:
 	void virtual BeginPlay() override;
+	
+	UPROPERTY()
+	ASightManager* SightManager;
 
 public:
 

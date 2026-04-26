@@ -85,10 +85,27 @@ void AGridHighlightActor::ShowReachableCells(AGridManager* GridManager, const TA
 
 		// Decals projicerar längs sin lokala X-axel, så vi låter X peka "ned" mot ytan
 		const FRotator DecalRotation = FRotationMatrix::MakeFromX(-GroundNormal).Rotator();
+		
+		DrawDebugBox(
+			GetWorld(),
+	GroundLocation,
+	FVector(GridManager->CellSize * 0.5f),
+	FColor::Green,
+	false,
+	5.f
+);
 
 		Decal->SetWorldLocation(FinalLocation);
 		Decal->SetWorldRotation(DecalRotation);
-		Decal->DecalSize = DecalSize;
+//		Decal->DecalSize = DecalSize;
+		const float HalfSize = GridManager->CellSize * 0.5f;
+
+		Decal->DecalSize = FVector(
+			GridManager->CellSize,
+			HalfSize,
+			HalfSize
+		);
+		
 		Decal->SetDecalMaterial(ReachableDecalMaterial);
 		Decal->SetHiddenInGame(false);
 		Decal->SetVisibility(true);

@@ -5,6 +5,7 @@
 #include "GridHighlightActor.h"
 #include "GridManager.generated.h"
 
+class AGridBoundsActor;
 class AStrategyUnit;
 
 class UNavigationSystemV1;
@@ -24,7 +25,9 @@ public:
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
-
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Grid")
+	FVector GridOrigin = FVector::ZeroVector;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grid")
 	float CellSize = 100.f;
 
@@ -48,6 +51,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grid|Debug")
 	float GridLineThickness = 1.5f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grid|Debug")
+	bool bDebugGridDisabled = true;
 
 	FVector GridToWorldCenter(int32 X, int32 Y) const;
 
@@ -63,28 +69,37 @@ public:
 		const ANavigationData*& OutNavData,
 		FNavLocation& OutProjectedEnd
 	) const;
-
-
-
+	
+	bool TryGetNavigationLocationForCell(
+		const FIntPoint& Cell,
+		FVector& OutLocation
+	) const;
+	
 	bool IsCellOnNavMesh(
 		const FIntPoint& Cell,
 		FNavLocation* OutLocation
 	) const;
-/*
-	bool IsCellReachableFromUnit(
-		const AStrategyUnit* Unit,
-		const FIntPoint& Cell
-	) const;
-*/
+
 	bool IsCellWithinMoveRange(
 		const AStrategyUnit* Unit,
 		const FIntPoint& Cell,
 		int32 MaxMoveCells
 	) const;
+
+	void GetCellsInRange(
+		const FIntPoint& CenterCell,
+		int32 Range,
+		TArray<FIntPoint>& OutCells
+	) const;
+	
+	bool IsValidCell(const FIntPoint& Cell) const;
 	
 private:
 	void DrawGrid(bool bPersistent, float LifeTime) const;
 	void FlushGridDebugLines() const;
+
+	UPROPERTY()
+	AGridBoundsActor* GridBoundActor;
 	
 	UPROPERTY()
 	TArray<AActor*> SpawnedHighlights;

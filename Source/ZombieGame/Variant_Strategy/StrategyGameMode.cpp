@@ -13,6 +13,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Player/PlayerStrategySide.h"
 #include "Player/AIStrategySide.h"
+#include "Systems/SightManager.h"
 
 #include "ZombieGame/Variant_Strategy/StrategyUnit.h"
 
@@ -36,8 +37,13 @@ void AStrategyGameMode::BeginPlay()
 	PlayerSide = World->SpawnActor<APlayerStrategySide>(PlayerSideClass);
 	EnemySide = World->SpawnActor<AAIStrategySide>(EnemySideClass);
 	
+	SightManager = Cast<ASightManager>(
+		UGameplayStatics::GetActorOfClass(this, ASightManager::StaticClass())
+	);
+	
 	SetupSpawnPoints();
 	SpawnUnits();
+	SightManager->SetUnits(PlayerSide->Units, EnemySide->Units);
 //	StartMatchFlow();
 	OnMatchReady.AddDynamic(this, &AStrategyGameMode::StartMatchFlow);
 }

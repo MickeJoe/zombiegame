@@ -701,7 +701,14 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 				return;
 			}
 			*/
-			FVector MoveGoal = GridManager->GridToWorld(ClickedCell);
+	//		FVector MoveGoal = GridManager->GridToWorld(ClickedCell);
+			FVector MoveGoal;
+
+			if (!GridManager->TryGetNavigationLocationForCell(ClickedCell, MoveGoal))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Clicked cell is not on navmesh"));
+				return;
+			}
 
 			// move the lead unit to the goal, all other units to random navigable points around it
 //			FVector MoveGoal = CurrentMoveGoal;

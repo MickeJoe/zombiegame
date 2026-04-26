@@ -2,15 +2,21 @@
 
 
 #include "StrategyUnit.h"
+#include "../../Systems/GridManager.h"
 #include "AIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
 
 AStrategyUnit::AStrategyUnit()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	
+	GridManager = Cast<AGridManager>(
+	UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
+	);
 
 	// ensure this unit has a valid AI controller to handle move requests
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
@@ -173,4 +179,29 @@ void AStrategyUnit::ResetActionPoints()
 int32 AStrategyUnit::GetRemainingActionPoints() const
 {
 	return MaxActionPoints - UsedActionPoints;	
+}
+
+void AStrategyUnit::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (!GridManager)
+	{
+		return;
+	}
+
+	const FIntPoint CurrentCell = GridManager->WorldToGrid(GetActorLocation());
+
+	if (!bHasLastGridCell)
+	{
+		LastGridCell = CurrentCell;
+		bHasLastGridCell = true;
+		return;
+	}
+
+	if (CurrentCell != LastGridCell)
+	{
+		LastGridCell = CurrentCell;
+		OnGridCellChanged.Broadcast(this);
+	}
 }

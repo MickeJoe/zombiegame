@@ -7,6 +7,7 @@
 #include "AIController.h"
 #include "StrategyUnit.generated.h"
 
+class AGridManager;
 class AStrategySide;
 class USphereComponent;
 
@@ -19,6 +20,7 @@ enum class EStrategyUnitTeam : uint8
 
 /** Delegate to report that this unit has finished moving */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitMoveCompletedDelegate, AStrategyUnit*, Unit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGridCellChanged, AStrategyUnit*, Unit);
 
 /**
  *  A simple strategy game unit
@@ -39,6 +41,8 @@ protected:
 
 	/** Cast reference to the AI Controlling this unit */
 	TObjectPtr<AAIController> AIController;
+	
+	virtual void Tick(float DeltaTime) override;
 
 public:
 
@@ -68,6 +72,11 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
 	int32 MaxMovement = 8;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	int32 SightRange = 12;
+	
+	int32 GetSightRange() const { return SightRange; }
 
 	UFUNCTION(BlueprintPure, Category = "Movement")
 	int32 GetMaxMovement() const { return MaxMovement; }
@@ -77,6 +86,9 @@ public:
 
 	void SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam);
 	EStrategyUnitTeam GetStrategyUnitTeam() const;
+	
+	UPROPERTY(BlueprintAssignable)
+	FOnGridCellChanged OnGridCellChanged;
 
 protected:
 
@@ -111,4 +123,10 @@ public:
 
 protected:
 	int32 UsedActionPoints = 0;
+	
+	FIntPoint LastGridCell;
+	bool bHasLastGridCell = false;
+	
+	UPROPERTY(Transient)
+	AGridManager* GridManager;
 };
