@@ -142,15 +142,7 @@ void AGridManager::FlushGridDebugLines() const
         FlushPersistentDebugLines(World);
     }
 }
-/*
-FVector AGridManager::GridToWorld(const FIntPoint& Coord) const
-{
-    return GridOrigin + FVector(
-        Coord.X * CellSize + CellSize * 0.5f,
-        Coord.Y * CellSize + CellSize * 0.5f,
-        0.f);
-}
-*/
+
 FIntPoint AGridManager::WorldToGrid(const FVector& WorldLocation) const
 {
     const FVector Local = WorldLocation - GridOrigin;

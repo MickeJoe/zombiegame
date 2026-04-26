@@ -117,6 +117,11 @@ void ASightManager::UpdateEnemyVisibility() const
 	{
 		return;
 	}
+	
+	if (bFogDisabled)
+	{
+		return;
+	}
 
 	for (AStrategyUnit* Enemy : EnemyUnits)
 	{

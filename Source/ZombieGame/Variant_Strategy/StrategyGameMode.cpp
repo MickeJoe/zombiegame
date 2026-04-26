@@ -5,6 +5,7 @@
 
 #include "StrategyGameMode.h"
 
+#include "NavigationSystem.h"
 #include "StrategyPlayerController.h"
 #include "StrategySpawnPoint.h"
 #include "Player/StrategySide.h"
@@ -75,6 +76,40 @@ void AStrategyGameMode::SetupSpawnPoints()
 	}
 }
 
+FTransform AStrategyGameMode::GetProjectedSpawnTransform(
+	const AStrategySpawnPoint* Spawn) const
+{
+	FTransform Transform = Spawn->GetActorTransform();
+
+	UNavigationSystemV1* NavSys =
+		FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+
+	if (!NavSys)
+	{
+		return Transform;
+	}
+
+	FNavLocation ProjectedLocation;
+
+	const bool bProjected = NavSys->ProjectPointToNavigation(
+		Spawn->GetActorLocation(),
+		ProjectedLocation,
+		FVector(200.f, 200.f, 1000.f)
+	);
+
+	if (bProjected)
+	{
+		FVector Location = ProjectedLocation.Location;
+
+		// Bra om AStrategyUnit är Character, så kapseln inte börjar exakt i golvet
+		Location.Z += 50.f;
+
+		Transform.SetLocation(Location);
+	}
+
+	return Transform;
+}
+
 void AStrategyGameMode::SpawnUnits()
 {
 	FActorSpawnParameters Params;
@@ -85,28 +120,34 @@ void AStrategyGameMode::SpawnUnits()
 	{
 		AStrategyUnit* Unit = GetWorld()->SpawnActor<AStrategyUnit>(
 			PlayerUnitClass,
-			Spawn->GetActorTransform(),
+			GetProjectedSpawnTransform(Spawn),
 			Params);
+
+		if (!Unit)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Player unit spawn FAILED"));
+			continue;
+		}
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::Human);
 		PlayerSide->AddUnit(Unit);
-
-		UE_LOG(LogTemp, Warning, TEXT("Player unit spawned: %s"),
-			Unit ? *Unit->GetName() : TEXT("FAILED"));
 	}
 
 	for (AStrategySpawnPoint* Spawn : EnemySpawns)
 	{
 		AStrategyUnit* Unit = GetWorld()->SpawnActor<AStrategyUnit>(
 			EnemyUnitClass,
-			Spawn->GetActorTransform(),
+			GetProjectedSpawnTransform(Spawn),
 			Params);
+
+		if (!Unit)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Enemy unit spawn FAILED"));
+			continue;
+		}
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::AI);
 		EnemySide->AddUnit(Unit);
-
-		UE_LOG(LogTemp, Warning, TEXT("Enemy unit spawned: %s"),
-			Unit ? *Unit->GetName() : TEXT("FAILED"));
 	}
 }
 /*
