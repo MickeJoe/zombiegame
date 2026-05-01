@@ -3,6 +3,7 @@
 
 #include "StrategyUnit.h"
 #include "../../Systems/GridManager.h"
+#include "../../Enemy_AI/EnemyUnitAI.h"
 #include "AIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -17,7 +18,7 @@ AStrategyUnit::AStrategyUnit()
 	GridManager = Cast<AGridManager>(
 	UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
 	);
-
+	
 	// ensure this unit has a valid AI controller to handle move requests
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
@@ -159,6 +160,11 @@ void AStrategyUnit::OnMoveFinished(FAIRequestID RequestID, const FPathFollowingR
 void AStrategyUnit::SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam)
 {
 	StrategyUnitTeam = InStrategyUnitTeam;
+	
+	if (StrategyUnitTeam == EStrategyUnitTeam::AI)
+	{
+		EnemyAI = NewObject<UEnemyUnitAI>(this, EnemyAIClass);
+	}
 }
 
 EStrategyUnitTeam AStrategyUnit::GetStrategyUnitTeam() const

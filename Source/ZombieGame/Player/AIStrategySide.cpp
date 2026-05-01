@@ -1,26 +1,54 @@
 ﻿#include "AIStrategySide.h"
 
+#include "PlayerStrategySide.h"
 #include "../Variant_Strategy/StrategyGameMode.h"
+#include "Enemy_AI/WalkerEnemyAI.h"
 
-void AAIStrategySide::TakeTurn()
+void AAIStrategySide::TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide)
 {
-	Super::TakeTurn();
+	Super::TakeTurn(GridManager, PlayerSide);
+	
+	CachedPlayerSide = PlayerSide;
+	CachedGridManager = GridManager;
+	
+	CurrentUnitIndex = 0;
+	StartNextEnemyUnitTurn();
+}
 
-	FTimerHandle TimerHandle;
+void AAIStrategySide::OnEnemyUnitTurnDone(AStrategyUnit* Unit)
+{
+	StartNextEnemyUnitTurn();
+}
 
-	GetWorld()->GetTimerManager().SetTimer(
-		TimerHandle,
-		this,
-		&AAIStrategySide::OnTurnDone,
-		5.0f,   // delay i sekunder
-		false   // loop?
-	);
+void AAIStrategySide::StartNextEnemyUnitTurn()
+{
+	while (Units.IsValidIndex(CurrentUnitIndex))
+	{
+		AStrategyUnit* Unit = Units[CurrentUnitIndex];
+
+		++CurrentUnitIndex;
+
+		if (!Unit || !Unit->GetEnemyAI())
+		{
+			continue;
+		}
+
+		Unit->ResetActionPoints();
+
+		Unit->GetEnemyAI()->TakeTurn(
+			Unit,
+			CachedGridManager,
+			CachedPlayerSide,
+			this);
+
+		return;
+	}
+
+	OnTurnDone();
 }
 
 void AAIStrategySide::OnTurnDone()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Timer triggered!"));
-
 	if (AStrategyGameMode* GM = GetWorld()->GetAuthGameMode<AStrategyGameMode>())
 	{
 		GM->EndTurn();

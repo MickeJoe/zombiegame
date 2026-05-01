@@ -7,6 +7,7 @@
 #include "AIController.h"
 #include "StrategyUnit.generated.h"
 
+class UEnemyUnitAI;
 class AGridManager;
 class AStrategySide;
 class USphereComponent;
@@ -89,6 +90,8 @@ public:
 	
 	UPROPERTY(BlueprintAssignable)
 	FOnGridCellChanged OnGridCellChanged;
+	
+	TObjectPtr<UEnemyUnitAI> GetEnemyAI() const { return EnemyAI; }
 
 protected:
 
@@ -129,4 +132,10 @@ protected:
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;
+	
+	UPROPERTY(EditDefaultsOnly, Category="AI")
+	TSubclassOf<UEnemyUnitAI> EnemyAIClass;
+
+	UPROPERTY()
+	TObjectPtr<UEnemyUnitAI> EnemyAI;
 };

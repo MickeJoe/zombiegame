@@ -118,4 +118,7 @@ private:
 protected:
 	FTransform GetProjectedSpawnTransform(
 		const AStrategySpawnPoint* Spawn) const;
+	
+	UPROPERTY()
+	TObjectPtr<AGridManager> GridManager;	
 };

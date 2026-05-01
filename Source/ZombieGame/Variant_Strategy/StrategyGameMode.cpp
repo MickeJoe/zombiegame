@@ -15,6 +15,7 @@
 #include "Player/PlayerStrategySide.h"
 #include "Player/AIStrategySide.h"
 #include "Systems/SightManager.h"
+#include "Systems/GridManager.h"
 
 #include "ZombieGame/Variant_Strategy/StrategyUnit.h"
 
@@ -40,6 +41,10 @@ void AStrategyGameMode::BeginPlay()
 	
 	SightManager = Cast<ASightManager>(
 		UGameplayStatics::GetActorOfClass(this, ASightManager::StaticClass())
+	);
+	
+	GridManager = Cast<AGridManager>(
+		UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
 	);
 	
 	SetupSpawnPoints();
@@ -204,7 +209,14 @@ void AStrategyGameMode::StartTurn()
 	}
 
 	OnActiveSideChanged.Broadcast(ActiveStrategySide);
-	ActiveStrategySide->TakeTurn();
+	if (ActiveSide == EActiveSide::Player)
+	{
+		ActiveStrategySide->TakeTurn(GridManager, PlayerSide);
+	}
+	else
+	{
+		ActiveStrategySide->TakeTurn(GridManager, PlayerSide);
+	}
 }
 
 void AStrategyGameMode::EndTurn()
