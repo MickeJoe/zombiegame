@@ -50,12 +50,7 @@ void ASightManager::SetUnits(
 	{
 		RegisterUnit(Unit);
 	}
-/*
-	for (AStrategyUnit* Unit : EnemyUnits)
-	{
-		RegisterUnit(Unit);
-	}
-*/
+
 	UpdateSightAndFog();
 }
 
@@ -75,6 +70,19 @@ void ASightManager::FindGridManager()
 
 void ASightManager::UpdatePlayerSight()
 {
+	UpdateSightForUnits(PlayerUnits, VisibleCells, ExploredCells);
+}
+
+void ASightManager::UpdateEnemySight()
+{
+	UpdateSightForUnits(EnemyUnits, EnemyVisibleCells, EnemyExploredCells);
+}
+
+void ASightManager::UpdateSightForUnits(
+	const TArray<AStrategyUnit*>& Units,
+	TSet<FIntPoint>& OutVisibleCells,
+	TSet<FIntPoint>& OutExploredCells)
+{
 	if (!GridManager)
 	{
 		FindGridManager();
@@ -85,9 +93,9 @@ void ASightManager::UpdatePlayerSight()
 		return;
 	}
 
-	VisibleCells.Empty();
+	OutVisibleCells.Empty();
 
-	for (AStrategyUnit* Unit : PlayerUnits)
+	for (AStrategyUnit* Unit : Units)
 	{
 		if (!Unit)
 		{
@@ -104,8 +112,8 @@ void ASightManager::UpdatePlayerSight()
 		{
 			if (CanSeeCell(Unit, Cell))
 			{
-				VisibleCells.Add(Cell);
-				ExploredCells.Add(Cell);
+				OutVisibleCells.Add(Cell);
+				OutExploredCells.Add(Cell);
 			}
 		}
 	}

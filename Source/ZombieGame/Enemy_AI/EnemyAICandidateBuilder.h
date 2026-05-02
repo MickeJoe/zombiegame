@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+class ASightManager;
 class AAIStrategySide;
 struct FEnemyActionCandidate;
 class APlayerStrategySide;
@@ -24,6 +25,7 @@ public:
 	static void AddMoveTowardNearestVisiblePlayerCandidate(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
+		ASightManager* SightManager,
 		APlayerStrategySide* PlayerSide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
 

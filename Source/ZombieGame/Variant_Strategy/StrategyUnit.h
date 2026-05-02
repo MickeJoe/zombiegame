@@ -70,12 +70,6 @@ public:
 
 	/** Attempts to move this unit to its */
 	bool MoveToLocation(const FVector& Location, float AcceptanceRadius);
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
-	int32 MaxMovement = 8;
-	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
-	int32 SightRange = 12;
 	
 	int32 GetSightRange() const { return SightRange; }
 
@@ -125,7 +119,17 @@ public:
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
 protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
+	int32 MaxMovement = 8;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
+	int32 SightRange = 12;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
+	int32 MaxHealth = 50;
+	
 	int32 UsedActionPoints = 0;
+	int32 CurrentHealth = MaxHealth;
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;

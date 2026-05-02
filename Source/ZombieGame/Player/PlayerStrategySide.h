@@ -10,7 +10,7 @@ class APlayerStrategySide : public AStrategySide
 
 public:
 
-	virtual void TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide) override;
+	virtual void TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide) override;
 	
 	virtual bool IsHuman() const override;
 	virtual bool IsAI() const override;

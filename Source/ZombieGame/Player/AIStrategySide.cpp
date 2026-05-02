@@ -3,15 +3,18 @@
 #include "PlayerStrategySide.h"
 #include "../Variant_Strategy/StrategyGameMode.h"
 #include "Enemy_AI/WalkerEnemyAI.h"
+#include "Systems/SightManager.h"
 
-void AAIStrategySide::TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide)
+void AAIStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide)
 {
-	Super::TakeTurn(GridManager, PlayerSide);
+	Super::TakeTurn(GridManager, SightManager, PlayerSide);
 	
 	CachedPlayerSide = PlayerSide;
 	CachedGridManager = GridManager;
+	CachedSightManager = SightManager;
 	
 	CurrentUnitIndex = 0;
+	SightManager->UpdateEnemySight();
 	StartNextEnemyUnitTurn();
 }
 
@@ -38,6 +41,7 @@ void AAIStrategySide::StartNextEnemyUnitTurn()
 		Unit->GetEnemyAI()->TakeTurn(
 			Unit,
 			CachedGridManager,
+			CachedSightManager,
 			CachedPlayerSide,
 			this);
 

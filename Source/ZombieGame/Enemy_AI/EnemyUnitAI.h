@@ -5,6 +5,7 @@
 class AAIStrategySide;
 class AGridManager;
 class APlayerStrategySide;
+class ASightManager;
 class AStrategyUnit;
 
 UENUM()
@@ -53,6 +54,7 @@ public:
 	void TakeTurn(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
+		ASightManager* SightManager,
 		APlayerStrategySide* PlayerSide,
 		AAIStrategySide* EnemySide);
 	
@@ -63,6 +65,7 @@ protected:
 	virtual void GenerateCandidates(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
+		ASightManager* SightManager,
 		APlayerStrategySide* PlayerSide,
 		AAIStrategySide* EnemySide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
@@ -101,6 +104,7 @@ protected:
 	FEnemyActionCandidate CurrentAction;
 	
 	AGridManager* CachedGridManager;
+	ASightManager* CachedSightManager;
 	APlayerStrategySide* CachedPlayerSide;
 	AAIStrategySide* CachedEnemySide;
 };

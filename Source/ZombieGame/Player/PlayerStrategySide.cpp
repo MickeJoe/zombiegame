@@ -5,9 +5,9 @@
 
 class AStrategyPlayerController;
 
-void APlayerStrategySide::TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide)
+void APlayerStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide)
 {
-	Super::TakeTurn(GridManager, PlayerSide);
+	Super::TakeTurn(GridManager, SightManager, PlayerSide);
 	
 	if (AStrategyPlayerController* PC = GetWorld()->GetFirstPlayerController<AStrategyPlayerController>())
 	{
