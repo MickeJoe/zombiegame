@@ -7,6 +7,7 @@
 #include "AIController.h"
 #include "StrategyUnit.generated.h"
 
+class UWidgetComponent;
 class UEnemyUnitAI;
 class AGridManager;
 class AStrategySide;
@@ -17,6 +18,13 @@ enum class EStrategyUnitTeam : uint8
 {
 	Human,
 	AI
+};
+
+struct FWeaponDamage
+{
+	int32 Damage = 0;
+	int32 ArmorPierce = 0; // ignorerar armor
+	int32 ArmorShred = 0;  // tar bort armor
 };
 
 /** Delegate to report that this unit has finished moving */
@@ -49,6 +57,8 @@ public:
 
 	/** Constructor */
 	AStrategyUnit();
+	
+	virtual void BeginPlay() override;
 
 protected:
 
@@ -73,8 +83,11 @@ public:
 	
 	int32 GetSightRange() const { return SightRange; }
 
-	UFUNCTION(BlueprintPure, Category = "Movement")
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetMaxMovement() const { return MaxMovement; }
+	
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetCurrentHealth() const { return CurrentHealth; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
@@ -86,6 +99,8 @@ public:
 	FOnGridCellChanged OnGridCellChanged;
 	
 	TObjectPtr<UEnemyUnitAI> GetEnemyAI() const { return EnemyAI; }
+	
+	void UpdateStatusBar();
 
 protected:
 
@@ -107,7 +122,12 @@ protected:
 	/** Blueprint handler for strategy game interactions */
 	UFUNCTION(BlueprintImplementableEvent, Category="NPC", meta = (DisplayName="Interaction Behavior"))
 	void BP_InteractionBehavior(AStrategyUnit* Interactor);
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="UI")
+	TObjectPtr<UWidgetComponent> StatusBarWidgetComponent;
 
+	UPROPERTY(EditDefaultsOnly, Category="UI")
+	TSubclassOf<UUserWidget> StatusBarWidgetClass;
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Strategy")
 	int32 MaxActionPoints = 2;
@@ -115,6 +135,8 @@ public:
 	void UseAtionPoints(int32 ActionPoints);
 	int32 GetRemainingActionPoints() const;
 	void ResetActionPoints();
+	
+	void ApplyDamage(const FWeaponDamage& WeaponDamage);
 
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
@@ -126,10 +148,14 @@ protected:
 	int32 SightRange = 12;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 MaxHealth = 50;
+	int32 MaxHealth = 8;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
+	int32 MaxArmor = 2;
 	
 	int32 UsedActionPoints = 0;
 	int32 CurrentHealth = MaxHealth;
+	int32 CurrentArmor = MaxArmor;
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;

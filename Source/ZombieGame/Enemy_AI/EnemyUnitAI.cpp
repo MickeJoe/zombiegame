@@ -123,8 +123,8 @@ float UEnemyUnitAI::ScoreCandidate(
 
 	switch (Candidate.ActionType)
 	{
-	case EEnemyAIActionType::Attack:
-		Score += Weights.Attack;
+	case EEnemyAIActionType::BiteAttack:
+		Score += Weights.BiteAttack;
 /*
 		if (Candidate.bCanInfect)
 		{

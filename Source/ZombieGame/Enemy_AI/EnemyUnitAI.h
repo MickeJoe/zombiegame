@@ -11,7 +11,7 @@ class AStrategyUnit;
 UENUM()
 enum class EEnemyAIActionType : uint8
 {
-	Attack,
+	BiteAttack,
 	MoveToCover,
 	MoveTowardNearestVisiblePlayer,
 	HoldHighGround,
@@ -32,7 +32,7 @@ struct FEnemyActionCandidate
 
 struct FEnemyAIWeights
 {
-	float Attack = 0.0f;
+	float BiteAttack = 0.0f;
 	float Cover  = 0.0f;
 	float HighGround = 0.0f;
 	float Distance = 0.0f;

@@ -3,17 +3,74 @@
 #include "EnemyUnitAI.h"
 
 #include "EnemyAIQueryHelper.h"
+#include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
 #include "Systems/SightManager.h"
 #include "Variant_Strategy/StrategyUnit.h"
 
-void EnemyAICandidateBuilder::AddAttackCandidates(
+void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,
 	APlayerStrategySide* PlayerSide,
 	TArray<FEnemyActionCandidate>& OutCandidates)
 {
-	ensureMsgf(false, TEXT("AddAttackCandidates - Not implemented"));
+	if (!Unit || !GridManager || !PlayerSide)
+	{
+		return;
+	}
+
+	const FIntPoint UnitCell =
+		GridManager->WorldToGrid(Unit->GetActorLocation());
+
+	AStrategyUnit* BestTarget = nullptr;
+	FIntPoint BestTargetCell;
+	int32 BestHealth = TNumericLimits<int32>::Max();
+
+	for (AStrategyUnit* PlayerUnit : PlayerSide->Units)
+	{
+		if (!PlayerUnit)
+		{
+			continue;
+		}
+/*
+		if (PlayerUnit->IsDead())
+		{
+			continue;
+		}
+*/
+		const FIntPoint PlayerCell =
+			GridManager->WorldToGrid(PlayerUnit->GetActorLocation());
+
+		const int32 Distance =
+			FMath::Abs(PlayerCell.X - UnitCell.X) +
+			FMath::Abs(PlayerCell.Y - UnitCell.Y);
+
+		if (Distance != 1)
+		{
+			continue;
+		}
+
+		const int32 Health = PlayerUnit->GetCurrentHealth();
+
+		if (Health < BestHealth)
+		{
+			BestHealth = Health;
+			BestTarget = PlayerUnit;
+			BestTargetCell = PlayerCell;
+		}
+	}
+
+	if (!BestTarget)
+	{
+		return;
+	}
+
+	FEnemyActionCandidate Candidate;
+	Candidate.ActionType = EEnemyAIActionType::BiteAttack;
+	Candidate.TargetUnit = BestTarget;
+	Candidate.TargetCell = BestTargetCell;
+
+	OutCandidates.Add(Candidate);
 }
 
 void EnemyAICandidateBuilder::AddMoveToCoverCandidates(

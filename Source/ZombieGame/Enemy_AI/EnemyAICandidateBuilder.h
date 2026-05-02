@@ -10,7 +10,7 @@ class AStrategyUnit;
 class EnemyAICandidateBuilder
 {
 public:
-	static void AddAttackCandidates(
+	static void AddBiteAttackCandidate(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
 		APlayerStrategySide* PlayerSide,
