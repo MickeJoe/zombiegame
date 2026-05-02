@@ -5,9 +5,11 @@
 #include "../../Systems/GridManager.h"
 #include "../../Enemy_AI/EnemyUnitAI.h"
 #include "AIController.h"
+#include "UnitStatusBarWidget.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
 
@@ -44,6 +46,29 @@ AStrategyUnit::AStrategyUnit()
 	GetCharacterMovement()->bSnapToPlaneAtStart = true;
 	GetCharacterMovement()->SetFixedBrakingDistance(200.0f);
 	GetCharacterMovement()->SetFixedBrakingDistance(true);
+	
+	StatusBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("StatusBarWidget"));
+	StatusBarWidgetComponent->SetupAttachment(RootComponent);
+
+	StatusBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	StatusBarWidgetComponent->SetDrawSize(FVector2D(120.0f, 22.0f));
+	StatusBarWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 130.0f));
+	StatusBarWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void AStrategyUnit::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (StatusBarWidgetClass)
+	{
+		StatusBarWidgetComponent->SetWidgetClass(StatusBarWidgetClass);
+	}
+
+	CurrentHealth = MaxHealth;
+	CurrentArmor = MaxArmor;
+
+	UpdateStatusBar();
 }
 
 void AStrategyUnit::NotifyControllerChanged()
@@ -210,4 +235,51 @@ void AStrategyUnit::Tick(float DeltaTime)
 		LastGridCell = CurrentCell;
 		OnGridCellChanged.Broadcast(this);
 	}
+}
+
+void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
+{
+	if (WeaponDamage.Damage <= 0)
+	{
+		return;
+	}
+
+	const int32 EffectiveArmor = FMath::Max(CurrentArmor - WeaponDamage.ArmorPierce, 0);
+	const int32 HealthDamage = FMath::Max(WeaponDamage.Damage - EffectiveArmor, 0);
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - HealthDamage, 0, MaxHealth);
+
+	if (WeaponDamage.ArmorShred > 0)
+	{
+		CurrentArmor = FMath::Clamp(CurrentArmor - WeaponDamage.ArmorShred, 0, MaxArmor);
+	}
+
+	UpdateStatusBar();
+
+	if (CurrentHealth <= 0)
+	{
+		// Die();
+	}
+}
+
+void AStrategyUnit::UpdateStatusBar()
+{
+	if (!StatusBarWidgetComponent)
+	{
+		return;
+	}
+
+	UUnitStatusBarWidget* StatusWidget =
+		Cast<UUnitStatusBarWidget>(StatusBarWidgetComponent->GetUserWidgetObject());
+
+	if (!StatusWidget)
+	{
+		return;
+	}
+
+	StatusWidget->SetHealthAndArmor(
+		CurrentHealth,
+		MaxHealth,
+		CurrentArmor,
+		MaxArmor);
 }

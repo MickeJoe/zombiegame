@@ -17,9 +17,10 @@ public:
 		UEnemyUnitAI* OwnerAI);
 
 private:
-	static void ExecuteAttack(
+	static void ExecuteBiteAttack(
 		AStrategyUnit* Unit,
-		const FEnemyActionCandidate& Candidate);
+		const FEnemyActionCandidate& Candidate,
+		UEnemyUnitAI* OwnerAI);
 
 	static void ExecuteMove(
 		AGridManager* GridManager,

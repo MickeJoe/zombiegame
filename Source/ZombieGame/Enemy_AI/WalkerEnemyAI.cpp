@@ -18,7 +18,7 @@ void UWalkerEnemyAI::GenerateCandidates(
 {
 	Super::GenerateCandidates(Unit, GridManager, SightManager, PlayerSide, EnemySide, OutCandidates);
 	
-	EnemyAICandidateBuilder::AddAttackCandidates(
+	EnemyAICandidateBuilder::AddBiteAttackCandidate(
 		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
@@ -31,7 +31,7 @@ FEnemyAIWeights UWalkerEnemyAI::GetAIWeights() const
 	
 	FEnemyAIWeights Weights;
 
-	Weights.Attack = 120.f;
+	Weights.BiteAttack = 120.f;
 	Weights.MoveTowardTarget = 60.f;
 	Weights.DistanceToTarget = -10.f;
 	Weights.CanInfect = 50.f;

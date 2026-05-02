@@ -12,8 +12,8 @@ void FEnemyAIActionExecutor::Execute(
 {
 	switch (Candidate.ActionType)
 	{
-	case EEnemyAIActionType::Attack:
-		ExecuteAttack(Unit, Candidate);
+	case EEnemyAIActionType::BiteAttack:
+		ExecuteBiteAttack(Unit, Candidate, OwnerAI);
 		break;
 
 	case EEnemyAIActionType::MoveToCover:
@@ -37,17 +37,18 @@ void FEnemyAIActionExecutor::Execute(
 	}
 }
 
-void FEnemyAIActionExecutor::ExecuteAttack(
+void FEnemyAIActionExecutor::ExecuteBiteAttack(
 	AStrategyUnit* Unit,
-	const FEnemyActionCandidate& Candidate)
+	const FEnemyActionCandidate& Candidate,
+	UEnemyUnitAI* OwnerAI)
 {
-	ensureMsgf(false, TEXT("ExecuteAttack - Not Implemented"));
-/*	
-	if (Candidate.AttackTarget)
-	{
-
-	}
-	*/
+	FWeaponDamage Damage;
+	Damage.Damage = 3;
+	Damage.ArmorPierce = false;
+	Damage.ArmorShred = false;
+	
+	Unit->ApplyDamage(Damage);
+	OwnerAI->OnMoveCompleted(Unit);
 }
 
 void FEnemyAIActionExecutor::ExecuteMove(
