@@ -4,6 +4,7 @@
 
 #include "EnemyAIQueryHelper.h"
 #include "Systems/GridManager.h"
+#include "Systems/SightManager.h"
 #include "Variant_Strategy/StrategyUnit.h"
 
 void EnemyAICandidateBuilder::AddAttackCandidates(
@@ -27,6 +28,7 @@ void EnemyAICandidateBuilder::AddMoveToCoverCandidates(
 void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
     AStrategyUnit* Unit,
     AGridManager* GridManager,
+    ASightManager* SightManager,
     APlayerStrategySide* PlayerSide,
     TArray<FEnemyActionCandidate>& OutCandidates)
 {
@@ -51,9 +53,7 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
         GridManager->WorldToGrid(TargetUnit->GetActorLocation());
 
     const int32 MoveRange = Unit->GetMaxMovement();
-
-    TArray<FIntPoint> CandidateCells;
-    GridManager->GetCellsInRange(CurrentCell, MoveRange, CandidateCells);
+	const TSet<FIntPoint>& CandidateCells = SightManager->GetEnemyVisibleCells();
 
     bool bFoundBestCell = false;
     FIntPoint BestCell = CurrentCell;
@@ -76,7 +76,7 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
         {
             continue;
         }
-
+    	
         const int32 DistanceToTarget =
             FMath::Abs(Cell.X - TargetCell.X) +
             FMath::Abs(Cell.Y - TargetCell.Y);

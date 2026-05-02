@@ -3,6 +3,7 @@
 
 #include "WalkerEnemyAI.generated.h"
 
+class ASightManager;
 class AAIStrategySide;
 class AGridManager;
 class APlayerStrategySide;
@@ -19,6 +20,7 @@ public:
 	virtual void GenerateCandidates(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
+		ASightManager* SightManager,
 		APlayerStrategySide* PlayerSide,
 		AAIStrategySide* EnemySide,
 		TArray<FEnemyActionCandidate>& OutCandidates) override;

@@ -21,11 +21,13 @@
 void UEnemyUnitAI::TakeTurn(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,
+	ASightManager* SightManager,
 	APlayerStrategySide* PlayerSide,
 	AAIStrategySide* EnemySide)
 {
 	OwnerUnit = Unit;
 	CachedGridManager = GridManager;
+	CachedSightManager = SightManager;
 	CachedPlayerSide = PlayerSide;
 	CachedEnemySide = EnemySide;
 
@@ -45,6 +47,7 @@ void UEnemyUnitAI::ExecuteNextAction()
 	GenerateCandidates(
 		OwnerUnit,
 		CachedGridManager,
+		CachedSightManager,
 		CachedPlayerSide,
 		CachedEnemySide,
 		Candidates);
@@ -79,6 +82,7 @@ void UEnemyUnitAI::ExecuteNextAction()
 void UEnemyUnitAI::GenerateCandidates(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,
+	ASightManager* SightManager,
 	APlayerStrategySide* PlayerSide,
 	AAIStrategySide* EnemySide,
 	TArray<FEnemyActionCandidate>& OutCandidates)

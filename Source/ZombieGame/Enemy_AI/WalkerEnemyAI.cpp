@@ -11,17 +11,18 @@
 void UWalkerEnemyAI::GenerateCandidates(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,
+	ASightManager* SightManager,
 	APlayerStrategySide* PlayerSide,
 	AAIStrategySide* EnemySide,
 	TArray<FEnemyActionCandidate>& OutCandidates)
 {
-	Super::GenerateCandidates(Unit, GridManager, PlayerSide, EnemySide, OutCandidates);
+	Super::GenerateCandidates(Unit, GridManager, SightManager, PlayerSide, EnemySide, OutCandidates);
 	
 	EnemyAICandidateBuilder::AddAttackCandidates(
 		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
-		Unit, GridManager, PlayerSide, OutCandidates);
+		Unit, GridManager, SightManager, PlayerSide, OutCandidates);
 }
 
 FEnemyAIWeights UWalkerEnemyAI::GetAIWeights() const

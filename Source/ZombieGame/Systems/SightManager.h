@@ -25,6 +25,7 @@ public:
 	);
 
 	void UpdatePlayerSight();
+	void UpdateEnemySight();
 	void UpdateEnemyVisibility() const;
 
 	bool IsCellVisible(const FIntPoint& Cell) const;
@@ -33,6 +34,9 @@ public:
 
 	const TSet<FIntPoint>& GetVisibleCells() const { return VisibleCells; }
 	const TSet<FIntPoint>& GetExploredCells() const { return ExploredCells; }
+	
+	const TSet<FIntPoint>& GetEnemyVisibleCells() const { return EnemyVisibleCells; }
+	const TSet<FIntPoint>& GetEnemyExploredCells() const { return EnemyExploredCells; }	
 	
 protected:
 	UPROPERTY()
@@ -67,7 +71,14 @@ private:
 
 	TSet<FIntPoint> VisibleCells;
 	TSet<FIntPoint> ExploredCells;
+	
+	TSet<FIntPoint> EnemyVisibleCells;
+	TSet<FIntPoint> EnemyExploredCells;	
 
 	void FindGridManager();
 	int32 GetSightRangeForUnit(const AStrategyUnit* Unit) const;
+	void UpdateSightForUnits(
+		const TArray<AStrategyUnit*>& Units,
+		TSet<FIntPoint>& OutVisibleCells,
+		TSet<FIntPoint>& OutExploredCells);
 };

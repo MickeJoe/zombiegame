@@ -211,11 +211,11 @@ void AStrategyGameMode::StartTurn()
 	OnActiveSideChanged.Broadcast(ActiveStrategySide);
 	if (ActiveSide == EActiveSide::Player)
 	{
-		ActiveStrategySide->TakeTurn(GridManager, PlayerSide);
+		ActiveStrategySide->TakeTurn(GridManager, SightManager, PlayerSide);
 	}
 	else
 	{
-		ActiveStrategySide->TakeTurn(GridManager, PlayerSide);
+		ActiveStrategySide->TakeTurn(GridManager, SightManager, PlayerSide);
 	}
 }
 

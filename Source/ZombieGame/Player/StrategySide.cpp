@@ -6,7 +6,7 @@ AStrategySide::AStrategySide()
 	PrimaryActorTick.bCanEverTick = false;
 }
 
-void AStrategySide::TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide)
+void AStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide)
 {
 	
 }

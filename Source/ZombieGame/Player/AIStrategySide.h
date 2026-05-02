@@ -3,6 +3,8 @@
 
 #include "AIStrategySide.generated.h"
 
+class ASightManager;
+
 UCLASS()
 class AAIStrategySide : public AStrategySide
 {
@@ -10,7 +12,7 @@ class AAIStrategySide : public AStrategySide
 
 public:
 
-	virtual void TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide) override;
+	virtual void TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide) override;
 	void OnEnemyUnitTurnDone(AStrategyUnit* Unit);
 
 	virtual bool IsHuman() const override;
@@ -29,4 +31,7 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<APlayerStrategySide> CachedPlayerSide = nullptr;
+	
+	UPROPERTY()
+	TObjectPtr<ASightManager> CachedSightManager = nullptr;	
 };

@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "StrategySide.generated.h"
 
+class ASightManager;
 class APlayerStrategySide;
 class AGridManager;
 class AStrategyUnit;
@@ -23,7 +24,7 @@ class AStrategySide : public AActor
 public:
 	AStrategySide();
 
-	virtual void TakeTurn(AGridManager* GridManager, APlayerStrategySide* PlayerSide);
+	virtual void TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	FName SideId = NAME_None;
