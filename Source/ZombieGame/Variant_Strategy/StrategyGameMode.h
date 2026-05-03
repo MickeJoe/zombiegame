@@ -55,11 +55,8 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FOnMatchReady OnMatchReady;
 	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Strategy")
-	TObjectPtr<APlayerStrategySide> PlayerSide;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Strategy")
-	TObjectPtr<AAIStrategySide> EnemySide;
+	TObjectPtr<APlayerStrategySide> GetPlayerSide() const { return PlayerSide; }
+	TObjectPtr<AAIStrategySide> GetEnemySide() const { return EnemySide; }	
 
 //	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Strategy")
 //	int32 ActiveSideIndex = INDEX_NONE;
@@ -116,6 +113,15 @@ private:
 	TArray<AStrategySpawnPoint*> EnemySpawns;
 	
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Strategy")
+	TObjectPtr<APlayerStrategySide> PlayerSide;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Strategy")
+	TObjectPtr<AAIStrategySide> EnemySide;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapons")
+	TObjectPtr<UStrategyWeaponData> DefaultWeaponData;
+	
 	FTransform GetProjectedSpawnTransform(
 		const AStrategySpawnPoint* Spawn) const;
 	

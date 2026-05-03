@@ -135,6 +135,7 @@ void AStrategyGameMode::SpawnUnits()
 		}
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::Human);
+		Unit->EquipWeapon(DefaultWeaponData);
 		PlayerSide->AddUnit(Unit);
 	}
 

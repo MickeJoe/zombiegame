@@ -42,10 +42,10 @@ void FEnemyAIActionExecutor::ExecuteBiteAttack(
 	const FEnemyActionCandidate& Candidate,
 	UEnemyUnitAI* OwnerAI)
 {
+	// @ToDo: Improve
+	const FAttackStats& AttackStats = Unit->GetBiteAttackStats();
 	FWeaponDamage Damage;
-	Damage.Damage = 3;
-	Damage.ArmorPierce = false;
-	Damage.ArmorShred = false;
+	Damage.Damage = AttackStats.Damage;
 	
 	Unit->ApplyDamage(Damage);
 	OwnerAI->OnMoveCompleted(Unit);

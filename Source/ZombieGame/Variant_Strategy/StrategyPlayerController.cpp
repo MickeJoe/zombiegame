@@ -19,8 +19,11 @@
 #include "Engine/OverlapResult.h"
 #include "Systems/GridManager.h"
 #include "Blueprint/UserWidget.h"
+#include "TargetingUI/TargetingHUDWidget.h"
 
 #include "UI/EndTurnWidget.h"
+#include "UI/UnitActionBarWidget.h"
+#include "UI/TargetingUI//StrategyTargetingComponent.h"
 
 PRAGMA_DISABLE_OPTIMIZATION
 
@@ -35,6 +38,10 @@ AStrategyPlayerController::AStrategyPlayerController()
 
 	HighlightActor = Cast<AGridHighlightActor>(
 	UGameplayStatics::GetActorOfClass(this, AGridHighlightActor::StaticClass())
+	);
+	
+	TargetingComponent = CreateDefaultSubobject<UStrategyTargetingComponent>(
+		TEXT("TargetingComponent")
 	);
 }
 
@@ -56,12 +63,34 @@ void AStrategyPlayerController::BeginPlay()
 		EndTurnWidget = CreateWidget<UEndTurnWidget>(this, EndTurnWidgetClass);
 		if (EndTurnWidget)
 		{
-			EndTurnWidget->AddToViewport(999);
+			EndTurnWidget->AddToViewport(1000);
 
 			EndTurnWidget->OnEndTurnClicked.AddDynamic(
 				this,
 				&AStrategyPlayerController::HandleEndTurnClicked
 			);
+		}
+	}
+	
+	if (UnitActionBarWidgetClass)
+	{
+		UnitActionBarWidget = CreateWidget<UUnitActionBarWidget>(this, UnitActionBarWidgetClass);
+		if (UnitActionBarWidget)
+		{
+			UnitActionBarWidget->AddToViewport(900);
+			UnitActionBarWidget->OnUnitActionClicked.AddDynamic(
+				this,
+				&AStrategyPlayerController::HandleUnitActionClicked);
+		}
+	}
+	
+	if (TargetingHUDClass)
+	{
+		TargetingHUD = CreateWidget<UTargetingHUDWidget>(this, TargetingHUDClass);
+		if (TargetingHUD)
+		{
+			TargetingHUD->AddToViewport(1000);
+			TargetingHUD->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 
@@ -559,6 +588,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 	}
 	
 	UpdateMovementHighlights();
+	RefreshActionBar();
 }
 
 void AStrategyPlayerController::DoSelectAllOnScreenCommand()
@@ -988,6 +1018,205 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 bool AStrategyPlayerController::IsSelectableUnit(const AStrategyUnit* Unit) const
 {
 	return Unit && Unit->GetStrategyUnitTeam() == EStrategyUnitTeam::Human;
+}
+
+void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType ActionType)
+{
+	if (ControlledUnits.Num() != 1)
+	{
+		return;
+	}
+	
+	AStrategyUnit* SelectedUnit = ControlledUnits[0];
+	
+	/*
+	if (!SelectedUnit)
+	{
+		return;
+	}
+*/
+	switch (ActionType)
+	{
+	case EPlayerUnitActionType::MeleeAttack:
+//		SelectedUnit->StartMeleeAttackMode();
+		break;
+
+	case EPlayerUnitActionType::WeaponAttack:
+		SelectedUnit->StartWeaponAttackMode();
+		break;
+
+	case EPlayerUnitActionType::Reload:
+//		SelectedUnit->ReloadWeapon();
+		RefreshActionBar();
+		break;
+
+	case EPlayerUnitActionType::HunkerDown:
+//		SelectedUnit->HunkerDown();
+		RefreshActionBar();
+		break;
+
+	case EPlayerUnitActionType::Overwatch:
+//		SelectedUnit->EnterOverwatch();
+		RefreshActionBar();
+		break;
+
+	case EPlayerUnitActionType::SkipTurn:
+//		SelectedUnit->SpendAllActionPoints();
+		RefreshActionBar();
+		break;
+
+	default:
+		break;
+	}
+}
+
+void AStrategyPlayerController::RefreshActionBar()
+{
+	if (ControlledUnits.Num() != 1)
+	{
+		return;
+	}
+	
+	AStrategyUnit* SelectedUnit = ControlledUnits[0];
+	if (!UnitActionBarWidget || !SelectedUnit)
+	{
+		return;
+	}
+	
+	AStrategyGameMode* GameMode = GetStrategyGameMode();
+	if (!ensureMsgf(GameMode, TEXT("GameMode is null in AStrategyPlayerController::RefreshActionBar")))
+	{
+		return;
+	}
+
+	AAIStrategySide* EnemySide = GameMode->GetEnemySide();
+	if (!ensureMsgf(EnemySide, TEXT("EnemySide is null in AStrategyPlayerController::RefreshActionBar")))
+	{
+		return;
+	}
+	
+	TArray<FUnitActionButtonData> Actions;
+/*
+	Actions.Add({
+		EPlayerUnitActionType::MeleeAttack,
+		FText::FromString("Melee"),
+		nullptr,
+		SelectedUnit->CanMeleeAttack(),
+		FText::FromString("No AP or no target")
+	});
+*/
+	
+	
+	Actions.Add({
+		EPlayerUnitActionType::WeaponAttack,
+		FText::FromString("Fire"),
+		nullptr,
+		SelectedUnit->CanWeaponAttack(EnemySide),
+		FText::FromString("No ammo or no AP")
+	});
+	
+/*
+	Actions.Add({
+		EPlayerUnitActionType::Reload,
+		FText::FromString("Reload"),
+		nullptr,
+		SelectedUnit->CanReload(),
+		FText::FromString("Weapon is full or no AP")
+	});
+
+	Actions.Add({
+		EPlayerUnitActionType::HunkerDown,
+		FText::FromString("Hunker"),
+		nullptr,
+		SelectedUnit->CanHunkerDown(),
+		FText::FromString("No AP")
+	});
+
+	Actions.Add({
+		EPlayerUnitActionType::Overwatch,
+		FText::FromString("Overwatch"),
+		nullptr,
+		SelectedUnit->CanOverwatch(),
+		FText::FromString("No AP or no weapon")
+	});
+
+	Actions.Add({
+		EPlayerUnitActionType::SkipTurn,
+		FText::FromString("Skip"),
+		nullptr,
+		SelectedUnit->GetRemainingActionPoints() > 0,
+		FText::FromString("")
+	});
+*/
+	UnitActionBarWidget->SetActions(Actions);
+	
+}
+
+AStrategyGameMode* AStrategyPlayerController::GetStrategyGameMode() const
+{
+	UWorld* World = GetWorld();
+	return World ? Cast<AStrategyGameMode>(World->GetAuthGameMode()) : nullptr;
+}
+
+void AStrategyPlayerController::RemoveTacticalHUD() const
+{
+	EndTurnWidget->SetVisibility(ESlateVisibility::Collapsed);
+	UnitActionBarWidget->SetVisibility(ESlateVisibility::Collapsed);
+	TurnBannerWidget->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void AStrategyPlayerController::ShowTacticalHUD() const
+{
+	EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
+	UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
+	TurnBannerWidget->SetVisibility(ESlateVisibility::Visible);
+}
+
+void AStrategyPlayerController::ShowTargetingHUD()
+{
+	if (TargetingHUD)
+	{
+		TargetingHUD->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	if (EndTurnWidget)
+	{
+		EndTurnWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (UnitActionBarWidget)
+	{
+		UnitActionBarWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+
+	CurrentMouseCursor = EMouseCursor::Default;
+
+	FInputModeGameAndUI TargetingInputMode;
+	TargetingInputMode.SetHideCursorDuringCapture(false);
+	TargetingInputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(TargetingInputMode);
+}
+
+void AStrategyPlayerController::HideTargetingHUD()
+{
+	if (TargetingHUD)
+	{
+		TargetingHUD->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (EndTurnWidget)
+	{
+		EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	if (UnitActionBarWidget)
+	{
+		UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
+	}
 }
 
 PRAGMA_ENABLE_OPTIMIZATION
