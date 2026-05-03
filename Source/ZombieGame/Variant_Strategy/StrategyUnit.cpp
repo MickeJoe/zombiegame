@@ -4,7 +4,13 @@
 #include "StrategyUnit.h"
 #include "../../Systems/GridManager.h"
 #include "../../Enemy_AI/EnemyUnitAI.h"
+#include "Player/AIStrategySide.h"
+#include "Systems/AttackHandling/StrategyWeaponInstance.h"
+#include "Systems/AttackHandling/StrategyWeaponData.h"
 #include "AIController.h"
+#include "StrategyGameMode.h"
+#include "StrategyPlayerController.h"
+#include "UI/TargetingUI/StrategyTargetingComponent.h"
 #include "UnitStatusBarWidget.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -12,6 +18,7 @@
 #include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "Camera/CameraComponent.h"
 
 AStrategyUnit::AStrategyUnit()
 {
@@ -54,6 +61,22 @@ AStrategyUnit::AStrategyUnit()
 	StatusBarWidgetComponent->SetDrawSize(FVector2D(120.0f, 22.0f));
 	StatusBarWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 130.0f));
 	StatusBarWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	
+	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
+	FirstPersonCamera->SetupAttachment(GetRootComponent());
+
+	// Justera i editorn sen
+	FirstPersonCamera->SetRelativeLocation(FVector(30.f, 0.f, 90.f));
+	FirstPersonCamera->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
+	FirstPersonCamera->bUsePawnControlRotation = false;
+	
+	TargetBracketWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("TargetBracketWidget"));
+	TargetBracketWidget->SetupAttachment(RootComponent);
+
+	TargetBracketWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	TargetBracketWidget->SetDrawAtDesiredSize(true);
+	TargetBracketWidget->SetVisibility(false);
+	TargetBracketWidget->SetRelativeLocation(FVector(0.f, 0.f, 120.f));	
 }
 
 void AStrategyUnit::BeginPlay()
@@ -262,6 +285,126 @@ void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 	}
 }
 
+bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
+{
+	if (!GridManager || !EnemySide)
+	{
+		return false;
+	}
+
+	// 1. AP check
+	if (GetRemainingActionPoints() <= 0)
+	{
+		return false;
+	}
+
+	// 2. Ammo check
+	if (!EquippedWeapon.WeaponData)
+	{
+		return false;
+	}
+
+	if (EquippedWeapon.UsesAmmo() && EquippedWeapon.CurrentAmmo <= 0)
+	{
+		return false;
+	}
+
+	// 3. Range check
+	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
+	const int32 Range = EquippedWeapon.WeaponData->AttackStats.Range;
+
+	for (AStrategyUnit* Enemy : EnemySide->Units) // eller EnemySide->Units
+	{
+		if (!Enemy)
+		{
+			continue;
+		}
+
+		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
+
+		const int32 Distance = FMath::Abs(MyCell.X - EnemyCell.X) +
+							   FMath::Abs(MyCell.Y - EnemyCell.Y);
+
+		if (Distance <= Range)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void AStrategyUnit::StartWeaponAttackMode()
+{
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	AStrategyPlayerController* StrategyPC = Cast<AStrategyPlayerController>(PC);
+	if (!StrategyPC)
+	{
+		return;
+	}
+
+	UStrategyTargetingComponent* Targeting = StrategyPC->GetTargetingComponent();
+	if (!Targeting)
+	{
+		return;
+	}
+	
+	StrategyPC->RemoveTacticalHUD();
+	Targeting->EnterFireMode(this, GetEnemiesInRange());
+	StrategyPC->ShowTargetingHUD();
+}
+
+TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
+{
+	TArray<AStrategyUnit*> Result;
+	
+	AStrategyGameMode* GameMode = GetStrategyGameMode();
+	if (!ensureMsgf(GameMode, TEXT("GameMode is null in AStrategyPlayerController::RefreshActionBar")))
+	{
+		return Result;
+	}
+
+	AAIStrategySide* EnemySide = GameMode->GetEnemySide();
+	if (!ensureMsgf(EnemySide, TEXT("EnemySide is null in AStrategyPlayerController::RefreshActionBar")))
+	{
+		return Result;
+	}
+	
+	if (!GridManager || !EquippedWeapon.WeaponData)
+	{
+		return Result;
+	}
+
+	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
+	const int32 Range = EquippedWeapon.WeaponData->AttackStats.Range;
+
+	for (AStrategyUnit* Enemy : EnemySide->Units)
+	{
+		if (!Enemy)
+		{
+			continue;
+		}
+
+		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
+
+		const int32 Distance =
+			FMath::Abs(MyCell.X - EnemyCell.X) +
+			FMath::Abs(MyCell.Y - EnemyCell.Y);
+
+		if (Distance <= Range)
+		{
+			Result.Add(Enemy);
+		}
+	}
+
+	return Result;
+}
+
 void AStrategyUnit::UpdateStatusBar()
 {
 	if (!StatusBarWidgetComponent)
@@ -282,4 +425,23 @@ void AStrategyUnit::UpdateStatusBar()
 		MaxHealth,
 		CurrentArmor,
 		MaxArmor);
+}
+
+void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
+{
+	EquippedWeapon.Init(WeaponData);
+}
+
+AStrategyGameMode* AStrategyUnit::GetStrategyGameMode() const
+{
+	UWorld* World = GetWorld();
+	return World ? Cast<AStrategyGameMode>(World->GetAuthGameMode()) : nullptr;
+}
+
+void AStrategyUnit::SetTargetBracketVisible(bool bVisible)
+{
+	if (TargetBracketWidget)
+	{
+		TargetBracketWidget->SetVisibility(bVisible);
+	}
 }

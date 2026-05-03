@@ -5,8 +5,15 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AIController.h"
+#include "Systems/AttackHandling/AttackStats.h"
+#include "Systems/AttackHandling/StrategyWeaponInstance.h"
 #include "StrategyUnit.generated.h"
 
+class AStrategyGameMode;
+class UCameraComponent;
+class AAIStrategySide;
+class APlayerStrategySide;
+class UStrategyWeaponData;
 class UWidgetComponent;
 class UEnemyUnitAI;
 class AGridManager;
@@ -89,6 +96,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetCurrentHealth() const { return CurrentHealth; }
 
+	FAttackStats GetBiteAttackStats() const { return BiteAttack; }
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
 
@@ -101,6 +110,9 @@ public:
 	TObjectPtr<UEnemyUnitAI> GetEnemyAI() const { return EnemyAI; }
 	
 	void UpdateStatusBar();
+	
+	bool CanWeaponAttack(AAIStrategySide* EnemySide) const;
+	void StartWeaponAttackMode();
 
 protected:
 
@@ -137,6 +149,10 @@ public:
 	void ResetActionPoints();
 	
 	void ApplyDamage(const FWeaponDamage& WeaponDamage);
+	
+	void EquipWeapon(UStrategyWeaponData* WeaponData);
+	
+	void SetTargetBracketVisible(bool bVisible);
 
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
@@ -145,13 +161,22 @@ protected:
 	int32 MaxMovement = 8;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 SightRange = 12;
+	int32 SightRange = 28;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
 	int32 MaxHealth = 8;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
 	int32 MaxArmor = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
+	FAttackStats BiteAttack;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
+	FAttackStats HandAttack;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FStrategyWeaponInstance EquippedWeapon;
 	
 	int32 UsedActionPoints = 0;
 	int32 CurrentHealth = MaxHealth;
@@ -168,4 +193,17 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UEnemyUnitAI> EnemyAI;
+	
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat Camera")
+	TObjectPtr<UCameraComponent> FirstPersonCamera;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<UWidgetComponent> TargetBracketWidget;	
+
+private:
+	TArray<AStrategyUnit*> GetEnemiesInRange() const;
+	
+	AStrategyGameMode* GetStrategyGameMode() const;	
+	
 };

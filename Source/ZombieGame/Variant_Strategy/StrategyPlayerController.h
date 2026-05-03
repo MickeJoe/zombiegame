@@ -7,6 +7,13 @@
 #include "UI/TurnBannerWidget.h"
 #include "StrategyPlayerController.generated.h"
 
+enum class EPlayerUnitActionType : uint8;
+class UTargetingHUDWidget;
+class UTargetingActionBarWidget;
+class UStrategyTargetingComponent;
+class AStrategyGameMode;
+class AStrategyUnit;
+class UUnitActionBarWidget;
 class AGridHighlightActor;
 class AGridManager;
 class AStrategyPawn;
@@ -215,6 +222,15 @@ public:
 
 	/** Passes the list of selected units */
 	const TArray<AStrategyUnit*>& GetSelectedUnits();
+	
+	UStrategyTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
+	UTargetingHUDWidget* GetTargetingHUDWidget() const { return TargetingHUD; }
+	
+	void RemoveTacticalHUD() const;
+	void ShowTacticalHUD() const;
+	
+	void ShowTargetingHUD();
+	void HideTargetingHUD();
 
 protected:
 
@@ -229,7 +245,22 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UEndTurnWidget> EndTurnWidget;
+	
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UUnitActionBarWidget> UnitActionBarWidgetClass;
 
+	UPROPERTY()
+	TObjectPtr<UUnitActionBarWidget> UnitActionBarWidget;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Targeting", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UStrategyTargetingComponent> TargetingComponent;
+	
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UTargetingHUDWidget> TargetingHUDClass;
+
+	UPROPERTY()
+	TObjectPtr<UTargetingHUDWidget> TargetingHUD;
+	
 	UFUNCTION()
 	void HandleEndTurnClicked();
 	
@@ -329,7 +360,11 @@ protected:
 	void CheckTouchTap(bool& bTapped, bool& bDoubleTapped);
 	
 	void UpdateMovementHighlights();
-	bool IsSelectableUnit(const AStrategyUnit* Unit) const;	
+	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
+	
+	UFUNCTION()
+	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);
+	void RefreshActionBar();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
 	TObjectPtr<AGridHighlightActor> HighlightActor;
@@ -339,4 +374,8 @@ protected:
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;
+	
+private:
+	AStrategyGameMode* GetStrategyGameMode() const;
+	
 };
