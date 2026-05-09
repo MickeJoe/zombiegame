@@ -17,6 +17,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
+#include "Components/Widget.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -506,6 +507,11 @@ void AStrategyUnit::SetTargetBracketVisible(bool bVisible)
 	if (TargetBracketWidget)
 	{
 		TargetBracketWidget->SetVisibility(bVisible);
+
+		if (UWidget* TargetBracket = TargetBracketWidget->GetWidget())
+		{
+			TargetBracket->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		}
 	}
 }
 
@@ -513,7 +519,7 @@ void AStrategyUnit::SetTargetInfoVisible(bool bVisible)
 {
 	if (TargetInfoWidget)
 	{
-		TargetInfoWidget->SetVisibility(ESlateVisibility::Visible);
+		TargetInfoWidget->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 }
 

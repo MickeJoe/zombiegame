@@ -29,10 +29,18 @@ enum class EStrategyUnitTeam : uint8
 	AI
 };
 
+USTRUCT(BlueprintType)
 struct FWeaponDamage
 {
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 Damage = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 ArmorPierce = 0; // ignorerar armor
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 ArmorShred = 0;  // tar bort armor
 };
 
@@ -160,6 +168,7 @@ public:
 	void ApplyDamage(const FWeaponDamage& WeaponDamage);
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
+	const FStrategyWeaponInstance& GetEquippedWeapon() const { return EquippedWeapon; }
 	
 	UTargetInfoWidget* GetTargetInfoWidget() const { return TargetInfoWidget; }
 	

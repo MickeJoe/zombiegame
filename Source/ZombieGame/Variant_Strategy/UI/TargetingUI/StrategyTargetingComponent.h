@@ -29,6 +29,9 @@ private:
 	
 	UFUNCTION()
 	void ExitFireMode();
+
+	UFUNCTION()
+	void HandleFireClicked();
 	
 	UTargetingHUDWidget* GetTargetingHUDWidget();
 

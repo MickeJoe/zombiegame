@@ -1207,7 +1207,7 @@ void AStrategyPlayerController::HideTargetingHUD()
 	{
 		TargetingHUD->SetVisibility(ESlateVisibility::Collapsed);
 	}
-
+	
 	if (EndTurnWidget)
 	{
 		EndTurnWidget->SetVisibility(ESlateVisibility::Visible);

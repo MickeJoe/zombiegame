@@ -3,6 +3,7 @@
 #include "StrategyPlayerController.h"
 #include "TargetingActionBarWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "Systems/AttackHandling/StrategyAttackResolver.h"
 #include "Variant_Strategy/StrategyUnit.h"
 #include "Variant_Strategy/UI/TargetingUI/TargetingHUDWidget.h"
 #include "TargetInfoWidget.h"
@@ -22,13 +23,23 @@ void UStrategyTargetingComponent::EnterFireMode(
 		return;
 	}
 	
-	GetTargetingHUDWidget()->OnCycleTargetClicked.AddDynamic(
+	UTargetingHUDWidget* TargetingHUD = GetTargetingHUDWidget();
+	if (!TargetingHUD)
+	{
+		return;
+	}
+
+	TargetingHUD->OnCycleTargetClicked.AddUniqueDynamic(
     	this,
     	&UStrategyTargetingComponent::CycleToNextTarget);
 	
-	GetTargetingHUDWidget()->OnCancelClicked.AddDynamic(
+	TargetingHUD->OnCancelClicked.AddUniqueDynamic(
 		this,
 		&UStrategyTargetingComponent::ExitFireMode);
+
+	TargetingHUD->OnFireClicked.AddUniqueDynamic(
+		this,
+		&UStrategyTargetingComponent::HandleFireClicked);
 	
 	Attacker = InAttacker;
 	Targets.Reset();
@@ -119,7 +130,13 @@ void UStrategyTargetingComponent::CycleToNextTarget()
 void UStrategyTargetingComponent::ExitFireMode()
 {
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
-	GetTargetingHUDWidget()->OnCycleTargetClicked.RemoveAll(this);
+
+	if (UTargetingHUDWidget* TargetingHUD = GetTargetingHUDWidget())
+	{
+		TargetingHUD->OnCycleTargetClicked.RemoveAll(this);
+		TargetingHUD->OnCancelClicked.RemoveAll(this);
+		TargetingHUD->OnFireClicked.RemoveAll(this);
+	}
 
 	if (PC && PreviousViewTarget)
 	{
@@ -139,6 +156,15 @@ void UStrategyTargetingComponent::ExitFireMode()
 		PC->SetInputMode(InputMode);
 	}
 
+	for (AStrategyUnit* Target : Targets)
+	{
+		if (IsValid(Target))
+		{
+			Target->SetTargetBracketVisible(false);
+			Target->SetTargetInfoVisible(false);
+		}
+	}
+
 	bIsInFireMode = false;
 	Attacker = nullptr;
 	Targets.Reset();
@@ -153,6 +179,25 @@ void UStrategyTargetingComponent::ExitFireMode()
 	
 	StrategyPC->HideTargetingHUD();
 	StrategyPC->ShowTacticalHUD();
+}
+
+void UStrategyTargetingComponent::HandleFireClicked()
+{
+	if (!bIsInFireMode || !Attacker || !Targets.IsValidIndex(CurrentTargetIndex))
+	{
+		return;
+	}
+
+	AStrategyUnit* Target = Targets[CurrentTargetIndex];
+	if (!Target)
+	{
+		return;
+	}
+
+	const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
+	UStrategyAttackResolver::ResolveAndApply(Context);
+
+	ExitFireMode();
 }
 
 UTargetingHUDWidget* UStrategyTargetingComponent::GetTargetingHUDWidget()
