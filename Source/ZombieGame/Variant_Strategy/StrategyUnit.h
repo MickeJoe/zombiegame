@@ -5,10 +5,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AIController.h"
-#include "Systems/AttackHandling/AttackStats.h"
+#include "Data/Weapon/AttackStats.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
 #include "StrategyUnit.generated.h"
 
+class UTargetInfoWidget;
 class AStrategyGameMode;
 class UCameraComponent;
 class AAIStrategySide;
@@ -19,6 +20,7 @@ class UEnemyUnitAI;
 class AGridManager;
 class AStrategySide;
 class USphereComponent;
+class UUnitData;
 
 UENUM(BlueprintType)
 enum class EStrategyUnitTeam : uint8
@@ -88,15 +90,24 @@ public:
 	/** Attempts to move this unit to its */
 	bool MoveToLocation(const FVector& Location, float AcceptanceRadius);
 	
-	int32 GetSightRange() const { return SightRange; }
+	int32 GetSightRange() const;
 
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
-	int32 GetMaxMovement() const { return MaxMovement; }
+	int32 GetMaxMovement() const;
 	
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetCurrentHealth() const { return CurrentHealth; }
 
-	FAttackStats GetBiteAttackStats() const { return BiteAttack; }
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetMaxActionPoints() const;
+
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetMaxHealth() const;
+
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetMaxArmor() const;
+
+	FAttackStats GetBiteAttackStats() const;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
@@ -138,11 +149,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="UI")
 	TObjectPtr<UWidgetComponent> StatusBarWidgetComponent;
 
-	UPROPERTY(EditDefaultsOnly, Category="UI")
-	TSubclassOf<UUserWidget> StatusBarWidgetClass;
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Strategy")
-	int32 MaxActionPoints = 2;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Unit Data")
+	TObjectPtr<UUnitData> UnitData;
 
 	void UseAtionPoints(int32 ActionPoints);
 	int32 GetRemainingActionPoints() const;
@@ -152,35 +161,20 @@ public:
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
 	
+	UTargetInfoWidget* GetTargetInfoWidget() const { return TargetInfoWidget; }
+	
 	void SetTargetBracketVisible(bool bVisible);
+	void SetTargetInfoVisible(bool bVisible);	
 
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 MaxMovement = 8;
-	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 SightRange = 28;
-	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 MaxHealth = 8;
-	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Unit Stats")
-	int32 MaxArmor = 2;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
-	FAttackStats BiteAttack;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
-	FAttackStats HandAttack;
-	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FStrategyWeaponInstance EquippedWeapon;
 	
 	int32 UsedActionPoints = 0;
-	int32 CurrentHealth = MaxHealth;
-	int32 CurrentArmor = MaxArmor;
+	int32 CurrentHealth = 0;
+	int32 CurrentArmor = 0;
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;
@@ -188,9 +182,6 @@ protected:
 	UPROPERTY(Transient)
 	AGridManager* GridManager;
 	
-	UPROPERTY(EditDefaultsOnly, Category="AI")
-	TSubclassOf<UEnemyUnitAI> EnemyAIClass;
-
 	UPROPERTY()
 	TObjectPtr<UEnemyUnitAI> EnemyAI;
 	
@@ -199,7 +190,10 @@ protected:
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	TObjectPtr<UWidgetComponent> TargetBracketWidget;	
+	TObjectPtr<UWidgetComponent> TargetBracketWidget;
+	
+	UPROPERTY()
+	TObjectPtr<UTargetInfoWidget> TargetInfoWidget;
 
 private:
 	TArray<AStrategyUnit*> GetEnemiesInRange() const;

@@ -1,11 +1,12 @@
 ﻿#pragma once
 
 #include "AttackStats.h"
+#include "Data/Weapon/AttackStats.h"
 
 #include "StrategyWeaponData.generated.h"
 
 UCLASS(Blueprintable)
-class UStrategyWeaponData : public UDataAsset
+class UStrategyWeaponData : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 

@@ -12,8 +12,13 @@ class UStrategyTargetingComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
+	UStrategyTargetingComponent();
+	
 	void EnterFireMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets);
 	bool IsInFireMode() const { return bIsInFireMode; }
+	
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
 
 private:
 	void FocusCurrentTarget();

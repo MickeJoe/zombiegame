@@ -6,12 +6,14 @@
 #include "../../Enemy_AI/EnemyUnitAI.h"
 #include "Player/AIStrategySide.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
-#include "Systems/AttackHandling/StrategyWeaponData.h"
+#include "Data/Weapon/StrategyWeaponData.h"
 #include "AIController.h"
 #include "StrategyGameMode.h"
 #include "StrategyPlayerController.h"
 #include "UI/TargetingUI/StrategyTargetingComponent.h"
+#include "UI/TargetingUI/TargetInfoWidget.h"
 #include "UnitStatusBarWidget.h"
+#include "Data/Unit/UnitData.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
@@ -19,6 +21,17 @@
 #include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Camera/CameraComponent.h"
+
+namespace
+{
+	constexpr int32 DefaultMaxActionPoints = 2;
+	constexpr int32 DefaultMaxMovement = 8;
+	constexpr int32 DefaultSightRange = 28;
+	constexpr int32 DefaultMaxHealth = 8;
+	constexpr int32 DefaultMaxArmor = 2;
+}
+
+PRAGMA_DISABLE_OPTIMIZATION
 
 AStrategyUnit::AStrategyUnit()
 {
@@ -76,20 +89,40 @@ AStrategyUnit::AStrategyUnit()
 	TargetBracketWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	TargetBracketWidget->SetDrawAtDesiredSize(true);
 	TargetBracketWidget->SetVisibility(false);
-	TargetBracketWidget->SetRelativeLocation(FVector(0.f, 0.f, 120.f));	
+	TargetBracketWidget->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
+	
+
 }
 
 void AStrategyUnit::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (StatusBarWidgetClass)
+	if (UnitData && UnitData->StatusBarWidgetClass)
 	{
-		StatusBarWidgetComponent->SetWidgetClass(StatusBarWidgetClass);
+		StatusBarWidgetComponent->SetWidgetClass(UnitData->StatusBarWidgetClass);
+	}
+	
+	if (UnitData && UnitData->TargetInfoWidgetClass)
+	{
+		TargetInfoWidget = CreateWidget<UTargetInfoWidget>(GetWorld(), UnitData->TargetInfoWidgetClass);
+
+		if (TargetInfoWidget)
+		{
+			TargetInfoWidget->AddToViewport(1000);
+			TargetInfoWidget->SetVisibility(ESlateVisibility::Collapsed);
+			
+			
+		}
 	}
 
-	CurrentHealth = MaxHealth;
-	CurrentArmor = MaxArmor;
+	if (UnitData && UnitData->DefaultWeapon && !EquippedWeapon.WeaponData)
+	{
+		EquipWeapon(UnitData->DefaultWeapon);
+	}
+
+	CurrentHealth = GetMaxHealth();
+	CurrentArmor = GetMaxArmor();
 
 	UpdateStatusBar();
 }
@@ -209,9 +242,9 @@ void AStrategyUnit::SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam)
 {
 	StrategyUnitTeam = InStrategyUnitTeam;
 	
-	if (StrategyUnitTeam == EStrategyUnitTeam::AI)
+	if (StrategyUnitTeam == EStrategyUnitTeam::AI && UnitData && UnitData->EnemyAIClass)
 	{
-		EnemyAI = NewObject<UEnemyUnitAI>(this, EnemyAIClass);
+		EnemyAI = NewObject<UEnemyUnitAI>(this, UnitData->EnemyAIClass);
 	}
 }
 
@@ -232,7 +265,37 @@ void AStrategyUnit::ResetActionPoints()
 
 int32 AStrategyUnit::GetRemainingActionPoints() const
 {
-	return MaxActionPoints - UsedActionPoints;	
+	return GetMaxActionPoints() - UsedActionPoints;	
+}
+
+int32 AStrategyUnit::GetSightRange() const
+{
+	return UnitData ? UnitData->SightRange : DefaultSightRange;
+}
+
+int32 AStrategyUnit::GetMaxMovement() const
+{
+	return UnitData ? UnitData->MaxMovement : DefaultMaxMovement;
+}
+
+int32 AStrategyUnit::GetMaxActionPoints() const
+{
+	return UnitData ? UnitData->MaxActionPoints : DefaultMaxActionPoints;
+}
+
+int32 AStrategyUnit::GetMaxHealth() const
+{
+	return UnitData ? UnitData->MaxHealth : DefaultMaxHealth;
+}
+
+int32 AStrategyUnit::GetMaxArmor() const
+{
+	return UnitData ? UnitData->MaxArmor : DefaultMaxArmor;
+}
+
+FAttackStats AStrategyUnit::GetBiteAttackStats() const
+{
+	return UnitData ? UnitData->BiteAttack : FAttackStats();
 }
 
 void AStrategyUnit::Tick(float DeltaTime)
@@ -270,11 +333,11 @@ void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 	const int32 EffectiveArmor = FMath::Max(CurrentArmor - WeaponDamage.ArmorPierce, 0);
 	const int32 HealthDamage = FMath::Max(WeaponDamage.Damage - EffectiveArmor, 0);
 
-	CurrentHealth = FMath::Clamp(CurrentHealth - HealthDamage, 0, MaxHealth);
+	CurrentHealth = FMath::Clamp(CurrentHealth - HealthDamage, 0, GetMaxHealth());
 
 	if (WeaponDamage.ArmorShred > 0)
 	{
-		CurrentArmor = FMath::Clamp(CurrentArmor - WeaponDamage.ArmorShred, 0, MaxArmor);
+		CurrentArmor = FMath::Clamp(CurrentArmor - WeaponDamage.ArmorShred, 0, GetMaxArmor());
 	}
 
 	UpdateStatusBar();
@@ -422,9 +485,9 @@ void AStrategyUnit::UpdateStatusBar()
 
 	StatusWidget->SetHealthAndArmor(
 		CurrentHealth,
-		MaxHealth,
+		GetMaxHealth(),
 		CurrentArmor,
-		MaxArmor);
+		GetMaxArmor());
 }
 
 void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
@@ -445,3 +508,13 @@ void AStrategyUnit::SetTargetBracketVisible(bool bVisible)
 		TargetBracketWidget->SetVisibility(bVisible);
 	}
 }
+
+void AStrategyUnit::SetTargetInfoVisible(bool bVisible)
+{
+	if (TargetInfoWidget)
+	{
+		TargetInfoWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+}
+
+PRAGMA_ENABLE_OPTIMIZATION

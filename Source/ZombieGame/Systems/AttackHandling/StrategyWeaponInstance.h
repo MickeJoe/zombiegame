@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "StrategyWeaponData.h"
+#include "Data/Weapon/StrategyWeaponData.h"
 #include "StrategyWeaponInstance.generated.h"
 
 USTRUCT(BlueprintType)

@@ -2,8 +2,16 @@
 
 #include "StrategyPlayerController.h"
 #include "TargetingActionBarWidget.h"
+#include "Kismet/GameplayStatics.h"
 #include "Variant_Strategy/StrategyUnit.h"
 #include "Variant_Strategy/UI/TargetingUI/TargetingHUDWidget.h"
+#include "TargetInfoWidget.h"
+
+UStrategyTargetingComponent::UStrategyTargetingComponent()
+{
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
+}
 
 void UStrategyTargetingComponent::EnterFireMode(
 	AStrategyUnit* InAttacker,
@@ -59,6 +67,7 @@ void UStrategyTargetingComponent::FocusCurrentTarget()
 	}
 	
 	Target->SetTargetBracketVisible(true);
+	Target->SetTargetInfoVisible(true);
 	
 	const FVector From = Attacker->GetActorLocation();
 	const FVector To = Target->GetActorLocation();
@@ -99,6 +108,7 @@ void UStrategyTargetingComponent::CycleToNextTarget()
 	}
 	
 	Targets[CurrentTargetIndex]->SetTargetBracketVisible(false);
+	Targets[CurrentTargetIndex]->SetTargetInfoVisible(false);
 
 	CurrentTargetIndex =
 		(CurrentTargetIndex + 1) % Targets.Num();
@@ -160,4 +170,37 @@ UTargetingHUDWidget* UStrategyTargetingComponent::GetTargetingHUDWidget()
 	}
 	
 	return StrategyPC->GetTargetingHUDWidget();
+}
+
+void UStrategyTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!Targets.IsValidIndex(CurrentTargetIndex))
+	{
+		return;
+	}
+	
+	if (!Targets[CurrentTargetIndex]->GetTargetInfoWidget())
+	{
+		return;
+	}
+
+	AStrategyUnit* Target = Targets[CurrentTargetIndex];
+	if (!Target)
+	{
+		return;
+	}
+
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	FVector2D ScreenPos;
+	if (UGameplayStatics::ProjectWorldToScreen(PC, Target->GetActorLocation(), ScreenPos))
+	{
+		Target->GetTargetInfoWidget()->SetPositionInViewport(ScreenPos + FVector2D(-60.f, -200.f));
+	}
 }
