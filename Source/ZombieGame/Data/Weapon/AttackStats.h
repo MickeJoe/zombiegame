@@ -4,12 +4,42 @@
 #include "AttackStats.generated.h"
 
 USTRUCT(BlueprintType)
+struct FRangeChanceModifier
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 MinRange = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 MaxRange = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 HitModifier = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 CriticalModifier = 0;
+};
+
+USTRUCT(BlueprintType)
 struct FAttackStats
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Range = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Accuracy", meta=(ClampMin="0", ClampMax="100"))
+	int32 BaseHitChance = 65;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Accuracy", meta=(ClampMin="0", ClampMax="100"))
+	int32 MinimumHitChance = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Accuracy", meta=(ClampMin="0", ClampMax="100"))
+	int32 MaximumHitChance = 95;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Accuracy")
+	TArray<FRangeChanceModifier> RangeChanceModifiers;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Damage = 1;

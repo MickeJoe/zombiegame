@@ -22,7 +22,7 @@ void UWalkerEnemyAI::GenerateCandidates(
 		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
-		Unit, GridManager, SightManager, PlayerSide, OutCandidates);
+		Unit, GridManager, SightManager, PlayerSide, EnemySide, OutCandidates);
 }
 
 FEnemyAIWeights UWalkerEnemyAI::GetAIWeights() const

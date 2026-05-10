@@ -38,6 +38,15 @@ struct FStrategyAttackResult
 	bool bHit = false;
 
 	UPROPERTY(BlueprintReadOnly)
+	bool bCritical = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 HitChance = 0;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 CriticalChance = 0;
+
+	UPROPERTY(BlueprintReadOnly)
 	FWeaponDamage Damage;
 };
 
@@ -48,6 +57,9 @@ class UStrategyAttackResolver : public UObject
 
 public:
 	static FStrategyAttackContext MakeContext(AStrategyUnit* Attacker, AStrategyUnit* Target);
+	static int32 CalculateDistanceInCells(const FStrategyAttackContext& Context);
+	static int32 CalculateHitChance(const FStrategyAttackContext& Context);
+	static int32 CalculateCriticalChance(const FStrategyAttackContext& Context);
 	static FStrategyAttackResult Resolve(const FStrategyAttackContext& Context);
 	static FStrategyAttackResult ResolveAndApply(const FStrategyAttackContext& Context);
 };

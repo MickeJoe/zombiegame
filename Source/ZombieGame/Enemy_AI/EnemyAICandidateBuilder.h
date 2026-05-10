@@ -27,6 +27,7 @@ public:
 		AGridManager* GridManager,
 		ASightManager* SightManager,
 		APlayerStrategySide* PlayerSide,
+		AAIStrategySide* EnemySide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
 
 	static void AddHoldHighGroundCandidates(

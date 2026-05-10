@@ -79,6 +79,13 @@ void UStrategyTargetingComponent::FocusCurrentTarget()
 	
 	Target->SetTargetBracketVisible(true);
 	Target->SetTargetInfoVisible(true);
+
+	if (UTargetInfoWidget* TargetInfoWidget = Target->GetTargetInfoWidget())
+	{
+		const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
+		TargetInfoWidget->SetHitChance(UStrategyAttackResolver::CalculateHitChance(Context));
+		TargetInfoWidget->SetCritChance(UStrategyAttackResolver::CalculateCriticalChance(Context));
+	}
 	
 	const FVector From = Attacker->GetActorLocation();
 	const FVector To = Target->GetActorLocation();

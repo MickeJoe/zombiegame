@@ -35,6 +35,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Stats")
 	int32 MaxArmor = 2;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Accuracy")
+	int32 Aim = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Accuracy")
+	int32 WeaponSkill = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Accuracy")
+	int32 CriticalChanceModifier = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Defense")
+	int32 Defense = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Defense")
+	int32 CriticalDefense = 0;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat")
 	FAttackStats BiteAttack;
 
@@ -52,4 +67,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Equipment")
 	TObjectPtr<UStrategyWeaponData> DefaultWeapon;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
+	TObjectPtr<UAnimMontage> HitReactMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
+	TObjectPtr<UAnimMontage> DeathReactMontage;
 };

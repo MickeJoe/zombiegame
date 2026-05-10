@@ -3,10 +3,36 @@
 #include "EnemyUnitAI.h"
 
 #include "EnemyAIQueryHelper.h"
+#include "Player/AIStrategySide.h"
 #include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
 #include "Systems/SightManager.h"
 #include "Variant_Strategy/StrategyUnit.h"
+
+namespace
+{
+	void AddOccupiedCells(
+		const TArray<TObjectPtr<AStrategyUnit>>& Units,
+		const AStrategyUnit* MovingUnit,
+		const AGridManager* GridManager,
+		TSet<FIntPoint>& OccupiedCells)
+	{
+		if (!GridManager)
+		{
+			return;
+		}
+
+		for (const AStrategyUnit* OtherUnit : Units)
+		{
+			if (!OtherUnit || OtherUnit == MovingUnit || OtherUnit->GetCurrentHealth() <= 0)
+			{
+				continue;
+			}
+
+			OccupiedCells.Add(GridManager->WorldToGrid(OtherUnit->GetActorLocation()));
+		}
+	}
+}
 
 void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 	AStrategyUnit* Unit,
@@ -23,7 +49,7 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 		GridManager->WorldToGrid(Unit->GetActorLocation());
 
 	AStrategyUnit* BestTarget = nullptr;
-	FIntPoint BestTargetCell;
+	FIntPoint BestTargetCell = FIntPoint::ZeroValue;
 	int32 BestHealth = TNumericLimits<int32>::Max();
 
 	for (AStrategyUnit* PlayerUnit : PlayerSide->Units)
@@ -87,9 +113,10 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
     AGridManager* GridManager,
     ASightManager* SightManager,
     APlayerStrategySide* PlayerSide,
+	AAIStrategySide* EnemySide,
     TArray<FEnemyActionCandidate>& OutCandidates)
 {
-    if (!Unit || !GridManager || !PlayerSide)
+    if (!Unit || !GridManager || !SightManager || !PlayerSide || !EnemySide)
     {
         ensureMsgf(false, TEXT("AddMoveTowardNearestVisiblePlayerCandidate - Invalid input"));
         return;
@@ -111,6 +138,9 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
 
     const int32 MoveRange = Unit->GetMaxMovement();
 	const TSet<FIntPoint>& CandidateCells = SightManager->GetEnemyVisibleCells();
+	TSet<FIntPoint> OccupiedCells;
+	AddOccupiedCells(PlayerSide->Units, Unit, GridManager, OccupiedCells);
+	AddOccupiedCells(EnemySide->Units, Unit, GridManager, OccupiedCells);
 
     bool bFoundBestCell = false;
     FIntPoint BestCell = CurrentCell;
@@ -128,6 +158,11 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
         {
             continue;
         }
+
+    	if (OccupiedCells.Contains(Cell))
+    	{
+    		continue;
+    	}
 
         if (!GridManager->IsCellWithinMoveRange(Unit, Cell, MoveRange))
         {

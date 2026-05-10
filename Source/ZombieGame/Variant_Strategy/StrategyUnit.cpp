@@ -111,6 +111,7 @@ void AStrategyUnit::BeginPlay()
 		if (TargetInfoWidget)
 		{
 			TargetInfoWidget->AddToViewport(1000);
+			TargetInfoWidget->SetTarget(this);
 			TargetInfoWidget->SetVisibility(ESlateVisibility::Collapsed);
 			
 			
@@ -340,12 +341,22 @@ void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 	{
 		CurrentArmor = FMath::Clamp(CurrentArmor - WeaponDamage.ArmorShred, 0, GetMaxArmor());
 	}
-
+	
 	UpdateStatusBar();
 
 	if (CurrentHealth <= 0)
 	{
-		// Die();
+		if (UnitData && UnitData->HitReactMontage)
+		{
+			PlayAnimMontage(UnitData->DeathReactMontage);
+		}
+	}
+	else
+	{
+		if (UnitData && UnitData->HitReactMontage)
+		{
+			PlayAnimMontage(UnitData->HitReactMontage);
+		}
 	}
 }
 
