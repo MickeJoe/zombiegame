@@ -11,6 +11,7 @@ enum class EPlayerUnitActionType : uint8;
 class UTargetingHUDWidget;
 class UTargetingActionBarWidget;
 class UStrategyTargetingComponent;
+class UPlayerUnitRosterWidget;
 class AStrategyGameMode;
 class AStrategyUnit;
 class UUnitActionBarWidget;
@@ -251,6 +252,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UUnitActionBarWidget> UnitActionBarWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category="UI")
+	TSubclassOf<UPlayerUnitRosterWidget> PlayerUnitRosterWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UPlayerUnitRosterWidget> PlayerUnitRosterWidget;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Targeting", meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UStrategyTargetingComponent> TargetingComponent;
@@ -361,6 +368,7 @@ protected:
 	
 	void UpdateMovementHighlights();
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
+	void RefreshPlayerUnitRoster();
 	
 	UFUNCTION()
 	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);

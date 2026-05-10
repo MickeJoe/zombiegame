@@ -17,11 +17,14 @@
 #include "NavigationSystem.h"
 #include "StrategyGameMode.h"
 #include "Engine/OverlapResult.h"
+#include "TimerManager.h"
+#include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
 #include "Blueprint/UserWidget.h"
 #include "TargetingUI/TargetingHUDWidget.h"
 
 #include "UI/EndTurnWidget.h"
+#include "UI/PlayerUnitRosterWidget.h"
 #include "UI/UnitActionBarWidget.h"
 #include "UI/TargetingUI//StrategyTargetingComponent.h"
 
@@ -83,6 +86,26 @@ void AStrategyPlayerController::BeginPlay()
 				&AStrategyPlayerController::HandleUnitActionClicked);
 		}
 	}
+
+	TSubclassOf<UPlayerUnitRosterWidget> RosterWidgetClass = PlayerUnitRosterWidgetClass;
+	if (!RosterWidgetClass)
+	{
+		RosterWidgetClass = UPlayerUnitRosterWidget::StaticClass();
+	}
+
+	PlayerUnitRosterWidget = CreateWidget<UPlayerUnitRosterWidget>(this, RosterWidgetClass);
+	if (PlayerUnitRosterWidget)
+	{
+		PlayerUnitRosterWidget->AddToViewport(1100);
+		PlayerUnitRosterWidget->SetVisibility(ESlateVisibility::Visible);
+		PlayerUnitRosterWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+		PlayerUnitRosterWidget->SetPositionInViewport(FVector2D(16.0f, 16.0f), false);
+		PlayerUnitRosterWidget->SetDesiredSizeInViewport(FVector2D(236.0f, 360.0f));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerUnitRoster: widget creation failed"));
+	}
 	
 	if (TargetingHUDClass)
 	{
@@ -98,6 +121,11 @@ void AStrategyPlayerController::BeginPlay()
 	{
 		GM->OnMatchReady.Broadcast();
 	}
+
+	RefreshPlayerUnitRoster();
+
+	GetWorldTimerManager().SetTimerForNextTick(
+		FTimerDelegate::CreateUObject(this, &AStrategyPlayerController::RefreshPlayerUnitRoster));
 }
 
 void AStrategyPlayerController::HandleEndTurnClicked()
@@ -232,6 +260,8 @@ void AStrategyPlayerController::DragSelectUnits(const TArray<AStrategyUnit*>& Un
 		}
 
 	}
+
+	RefreshPlayerUnitRoster();
 }
 
 const TArray<AStrategyUnit*>& AStrategyPlayerController::GetSelectedUnits()
@@ -304,7 +334,6 @@ void AStrategyPlayerController::SelectHoldTriggered(const FInputActionValue& Val
 	{
 		StrategyHUD->DragSelectUpdate(StartingSelectionPosition, SelectionSize, SelectionPosition, true);
 	}
-	
 }
 
 void AStrategyPlayerController::SelectHoldCompleted(const FInputActionValue& Value)
@@ -589,6 +618,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 	
 	UpdateMovementHighlights();
 	RefreshActionBar();
+	RefreshPlayerUnitRoster();
 }
 
 void AStrategyPlayerController::DoSelectAllOnScreenCommand()
@@ -621,6 +651,7 @@ void AStrategyPlayerController::DoSelectAllOnScreenCommand()
 		}		
 	}
 
+	RefreshPlayerUnitRoster();
 }
 
 void AStrategyPlayerController::DoDeselectAllCommand()
@@ -644,6 +675,7 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 
 	// clear the controlled units list
 	ControlledUnits.Empty();
+	RefreshPlayerUnitRoster();
 }
 
 void AStrategyPlayerController::DoDragScrollCommand()
@@ -767,6 +799,7 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			{
 				const int32 MoveCost = 1;
 				CurrentUnit->UseAtionPoints(MoveCost);
+				RefreshPlayerUnitRoster();
 			}
 		}
 
@@ -790,6 +823,7 @@ void AStrategyPlayerController::OnMoveCompleted(AStrategyUnit* MovedUnit)
 		{
 			UpdateMovementHighlights();
 			RefreshActionBar();
+			RefreshPlayerUnitRoster();
 			return;
 		}
 
@@ -832,7 +866,10 @@ void AStrategyPlayerController::OnMoveCompleted(AStrategyUnit* MovedUnit)
 
 		UpdateMovementHighlights();
 		RefreshActionBar();
+		RefreshPlayerUnitRoster();
 	}
+
+	RefreshPlayerUnitRoster();
 }
 
 AStrategyUnit* AStrategyPlayerController::GetClosestSelectedUnitToLocation(FVector TargetLocation)
@@ -859,7 +896,6 @@ AStrategyUnit* AStrategyPlayerController::GetClosestSelectedUnitToLocation(FVect
 					OutUnit = CurrentUnit;
 					Closest = Dist;
 				}
-
 			}
 			else
 			{
@@ -1157,6 +1193,25 @@ void AStrategyPlayerController::RefreshActionBar()
 	
 }
 
+void AStrategyPlayerController::RefreshPlayerUnitRoster()
+{
+	if (!PlayerUnitRosterWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerUnitRoster: refresh skipped, widget is null"));
+		return;
+	}
+
+	AStrategyGameMode* GameMode = GetStrategyGameMode();
+	if (!GameMode || !GameMode->GetPlayerSide())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayerUnitRoster: refresh skipped, player side is not ready"));
+		return;
+	}
+
+	const TArray<AStrategyUnit*> AliveUnits = GameMode->GetPlayerSide()->GetAliveUnits();
+	PlayerUnitRosterWidget->SetUnits(AliveUnits, ControlledUnits);
+}
+
 AStrategyGameMode* AStrategyPlayerController::GetStrategyGameMode() const
 {
 	UWorld* World = GetWorld();
@@ -1175,7 +1230,12 @@ void AStrategyPlayerController::ShowTacticalHUD()
 	EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
 	UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
 	TurnBannerWidget->SetVisibility(ESlateVisibility::Visible);
+	if (PlayerUnitRosterWidget)
+	{
+		PlayerUnitRosterWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 	RefreshActionBar();
+	RefreshPlayerUnitRoster();
 }
 
 void AStrategyPlayerController::ShowTargetingHUD()
