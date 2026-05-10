@@ -165,7 +165,7 @@ FStrategyAttackResult UStrategyAttackResolver::ResolveAndApply(const FStrategyAt
 
 	if (Result.bHit && Context.Target)
 	{
-		Context.Target->ApplyDamage(Result.Damage);
+		Result.ReactionMontageDuration = Context.Target->ApplyDamage(Result.Damage);
 	}
 
 	return Result;

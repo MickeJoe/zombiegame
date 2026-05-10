@@ -120,7 +120,7 @@ void UStrategyTargetingComponent::EnterCameraView()
 
 void UStrategyTargetingComponent::CycleToNextTarget()
 {
-	if (!bIsInFireMode || Targets.Num() == 0)
+	if (!bIsInFireMode || bIsResolvingAttack || Targets.Num() == 0)
 	{
 		return;
 	}
@@ -136,7 +136,17 @@ void UStrategyTargetingComponent::CycleToNextTarget()
 
 void UStrategyTargetingComponent::ExitFireMode()
 {
+	if (bIsResolvingAttack)
+	{
+		return;
+	}
+
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ExitFireModeTimerHandle);
+	}
 
 	if (UTargetingHUDWidget* TargetingHUD = GetTargetingHUDWidget())
 	{
@@ -173,6 +183,7 @@ void UStrategyTargetingComponent::ExitFireMode()
 	}
 
 	bIsInFireMode = false;
+	bIsResolvingAttack = false;
 	Attacker = nullptr;
 	Targets.Reset();
 	CurrentTargetIndex = INDEX_NONE;
@@ -188,9 +199,15 @@ void UStrategyTargetingComponent::ExitFireMode()
 	StrategyPC->ShowTacticalHUD();
 }
 
+void UStrategyTargetingComponent::CompleteDelayedExitFireMode()
+{
+	bIsResolvingAttack = false;
+	ExitFireMode();
+}
+
 void UStrategyTargetingComponent::HandleFireClicked()
 {
-	if (!bIsInFireMode || !Attacker || !Targets.IsValidIndex(CurrentTargetIndex))
+	if (!bIsInFireMode || bIsResolvingAttack || !Attacker || !Targets.IsValidIndex(CurrentTargetIndex))
 	{
 		return;
 	}
@@ -202,9 +219,36 @@ void UStrategyTargetingComponent::HandleFireClicked()
 	}
 
 	const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
-	UStrategyAttackResolver::ResolveAndApply(Context);
+	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
+	Attacker->SpendWeaponAttackResources();
 
-	ExitFireMode();
+	bIsResolvingAttack = true;
+	ExitFireModeAfterDelay(Result.ReactionMontageDuration);
+}
+
+void UStrategyTargetingComponent::ExitFireModeAfterDelay(float DelaySeconds)
+{
+	if (DelaySeconds <= 0.0f)
+	{
+		bIsResolvingAttack = false;
+		ExitFireMode();
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			ExitFireModeTimerHandle,
+			this,
+			&UStrategyTargetingComponent::CompleteDelayedExitFireMode,
+			DelaySeconds,
+			false);
+	}
+	else
+	{
+		bIsResolvingAttack = false;
+		ExitFireMode();
+	}
 }
 
 UTargetingHUDWidget* UStrategyTargetingComponent::GetTargetingHUDWidget()

@@ -227,7 +227,7 @@ public:
 	UTargetingHUDWidget* GetTargetingHUDWidget() const { return TargetingHUD; }
 	
 	void RemoveTacticalHUD() const;
-	void ShowTacticalHUD() const;
+	void ShowTacticalHUD();
 	
 	void ShowTargetingHUD();
 	void HideTargetingHUD();
@@ -364,7 +364,9 @@ protected:
 	
 	UFUNCTION()
 	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);
+public:
 	void RefreshActionBar();
+protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
 	TObjectPtr<AGridHighlightActor> HighlightActor;

@@ -788,6 +788,8 @@ void AStrategyPlayerController::OnMoveCompleted(AStrategyUnit* MovedUnit)
 		// skip if interactions are locked
 		if (!bAllowInteraction)
 		{
+			UpdateMovementHighlights();
+			RefreshActionBar();
 			return;
 		}
 
@@ -827,6 +829,9 @@ void AStrategyPlayerController::OnMoveCompleted(AStrategyUnit* MovedUnit)
 				}
 			}
 		}
+
+		UpdateMovementHighlights();
+		RefreshActionBar();
 	}
 }
 
@@ -1165,11 +1170,12 @@ void AStrategyPlayerController::RemoveTacticalHUD() const
 	TurnBannerWidget->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void AStrategyPlayerController::ShowTacticalHUD() const
+void AStrategyPlayerController::ShowTacticalHUD()
 {
 	EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
 	UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
 	TurnBannerWidget->SetVisibility(ESlateVisibility::Visible);
+	RefreshActionBar();
 }
 
 void AStrategyPlayerController::ShowTargetingHUD()

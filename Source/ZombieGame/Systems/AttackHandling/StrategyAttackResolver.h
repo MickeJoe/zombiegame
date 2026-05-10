@@ -48,6 +48,9 @@ struct FStrategyAttackResult
 
 	UPROPERTY(BlueprintReadOnly)
 	FWeaponDamage Damage;
+
+	UPROPERTY(BlueprintReadOnly)
+	float ReactionMontageDuration = 0.0f;
 };
 
 UCLASS()

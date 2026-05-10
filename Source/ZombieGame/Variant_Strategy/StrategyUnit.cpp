@@ -325,11 +325,11 @@ void AStrategyUnit::Tick(float DeltaTime)
 	}
 }
 
-void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
+float AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 {
 	if (WeaponDamage.Damage <= 0)
 	{
-		return;
+		return 0.0f;
 	}
 
 	const int32 EffectiveArmor = FMath::Max(CurrentArmor - WeaponDamage.ArmorPierce, 0);
@@ -346,18 +346,40 @@ void AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 
 	if (CurrentHealth <= 0)
 	{
-		if (UnitData && UnitData->HitReactMontage)
+		if (UnitData && UnitData->DeathReactMontage)
 		{
-			PlayAnimMontage(UnitData->DeathReactMontage);
+			const float PlayedLength = PlayAnimMontage(UnitData->DeathReactMontage);
+			if (PlayedLength <= 0.0f)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Failed to play death montage for %s"), *GetName());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Log, TEXT("Play length is %f for %s"), PlayedLength, *GetName());
+			}
+
+			return PlayedLength;
 		}
 	}
 	else
 	{
 		if (UnitData && UnitData->HitReactMontage)
 		{
-			PlayAnimMontage(UnitData->HitReactMontage);
+			const float PlayedLength = PlayAnimMontage(UnitData->HitReactMontage);
+			if (PlayedLength <= 0.0f)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Failed to play hit react montage for %s"), *GetName());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Log, TEXT("Play length is %f for %s"), PlayedLength, *GetName());
+			}
+
+			return PlayedLength;
 		}
 	}
+
+	return 0.0f;
 }
 
 bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
@@ -379,18 +401,29 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (EquippedWeapon.UsesAmmo() && EquippedWeapon.CurrentAmmo <= 0)
+	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	if (!AttackStats)
+	{
+		return false;
+	}
+
+	if (GetRemainingActionPoints() < AttackStats->ActionPointCost)
+	{
+		return false;
+	}
+
+	if (EquippedWeapon.UsesAmmo() && EquippedWeapon.CurrentAmmo < AttackStats->AmmoCost)
 	{
 		return false;
 	}
 
 	// 3. Range check
 	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
-	const int32 Range = EquippedWeapon.WeaponData->AttackStats.Range;
+	const int32 Range = AttackStats->Range;
 
 	for (AStrategyUnit* Enemy : EnemySide->Units) // eller EnemySide->Units
 	{
-		if (!Enemy)
+		if (!Enemy || Enemy->GetCurrentHealth() <= 0)
 		{
 			continue;
 		}
@@ -407,6 +440,22 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 	}
 
 	return false;
+}
+
+void AStrategyUnit::SpendWeaponAttackResources()
+{
+	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	if (!AttackStats)
+	{
+		return;
+	}
+
+	UseAtionPoints(AttackStats->ActionPointCost);
+
+	if (EquippedWeapon.UsesAmmo())
+	{
+		EquippedWeapon.CurrentAmmo = FMath::Max(EquippedWeapon.CurrentAmmo - AttackStats->AmmoCost, 0);
+	}
 }
 
 void AStrategyUnit::StartWeaponAttackMode()
@@ -455,12 +504,18 @@ TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
 		return Result;
 	}
 
+	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	if (!AttackStats)
+	{
+		return Result;
+	}
+
 	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
-	const int32 Range = EquippedWeapon.WeaponData->AttackStats.Range;
+	const int32 Range = AttackStats->Range;
 
 	for (AStrategyUnit* Enemy : EnemySide->Units)
 	{
-		if (!Enemy)
+		if (!Enemy || Enemy->GetCurrentHealth() <= 0)
 		{
 			continue;
 		}

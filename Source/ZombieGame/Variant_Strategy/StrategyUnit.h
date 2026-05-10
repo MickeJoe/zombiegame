@@ -131,6 +131,7 @@ public:
 	void UpdateStatusBar();
 	
 	bool CanWeaponAttack(AAIStrategySide* EnemySide) const;
+	void SpendWeaponAttackResources();
 	void StartWeaponAttackMode();
 
 protected:
@@ -165,7 +166,7 @@ public:
 	int32 GetRemainingActionPoints() const;
 	void ResetActionPoints();
 	
-	void ApplyDamage(const FWeaponDamage& WeaponDamage);
+	float ApplyDamage(const FWeaponDamage& WeaponDamage);
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
 	const FStrategyWeaponInstance& GetEquippedWeapon() const { return EquippedWeapon; }

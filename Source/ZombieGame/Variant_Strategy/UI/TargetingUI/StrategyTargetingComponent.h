@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "TimerManager.h"
 #include "StrategyTargetingComponent.generated.h"
 
 class UTargetingHUDWidget;
@@ -31,7 +32,12 @@ private:
 	void ExitFireMode();
 
 	UFUNCTION()
+	void CompleteDelayedExitFireMode();
+
+	UFUNCTION()
 	void HandleFireClicked();
+
+	void ExitFireModeAfterDelay(float DelaySeconds);
 	
 	UTargetingHUDWidget* GetTargetingHUDWidget();
 
@@ -46,4 +52,6 @@ private:
 
 	int32 CurrentTargetIndex = INDEX_NONE;
 	bool bIsInFireMode = false;
+	bool bIsResolvingAttack = false;
+	FTimerHandle ExitFireModeTimerHandle;
 };

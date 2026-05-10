@@ -32,6 +32,11 @@ namespace
 			OccupiedCells.Add(GridManager->WorldToGrid(OtherUnit->GetActorLocation()));
 		}
 	}
+
+	int32 GetManhattanDistance(const FIntPoint& A, const FIntPoint& B)
+	{
+		return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+	}
 }
 
 void EnemyAICandidateBuilder::AddBiteAttackCandidate(
@@ -153,6 +158,11 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
             continue;
         }
 
+    	if (GetManhattanDistance(CurrentCell, Cell) > MoveRange)
+    	{
+    		continue;
+    	}
+
         // Don't move onto the player unit cell.
         if (Cell == TargetCell)
         {
@@ -169,9 +179,7 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
             continue;
         }
     	
-        const int32 DistanceToTarget =
-            FMath::Abs(Cell.X - TargetCell.X) +
-            FMath::Abs(Cell.Y - TargetCell.Y);
+        const int32 DistanceToTarget = GetManhattanDistance(Cell, TargetCell);
 
         // Best possible melee position: adjacent to target.
         if (DistanceToTarget < BestManhattanDistance)
