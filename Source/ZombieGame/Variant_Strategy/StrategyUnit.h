@@ -207,7 +207,9 @@ protected:
 
 private:
 	TArray<AStrategyUnit*> GetEnemiesInRange() const;
+	void ScheduleDeathRemoval(float DelaySeconds);
 	
 	AStrategyGameMode* GetStrategyGameMode() const;	
+	bool bDeathRemovalScheduled = false;
 	
 };

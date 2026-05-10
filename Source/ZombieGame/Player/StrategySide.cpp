@@ -40,9 +40,8 @@ TArray<AStrategyUnit*> AStrategySide::GetAliveUnits() const
 
 	for (AStrategyUnit* Unit : Units)
 	{
-		if (IsValid(Unit))
+		if (IsValid(Unit) && Unit->GetCurrentHealth() > 0)
 		{
-			// Byt mot din egen IsDead-logik senare
 			Result.Add(Unit);
 		}
 	}
@@ -54,7 +53,7 @@ bool AStrategySide::HasLivingUnits() const
 {
 	for (AStrategyUnit* Unit : Units)
 	{
-		if (IsValid(Unit))
+		if (IsValid(Unit) && Unit->GetCurrentHealth() > 0)
 		{
 			return true;
 		}

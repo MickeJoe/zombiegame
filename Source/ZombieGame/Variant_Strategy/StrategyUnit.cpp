@@ -10,10 +10,12 @@
 #include "AIController.h"
 #include "StrategyGameMode.h"
 #include "StrategyPlayerController.h"
+#include "Player/StrategySide.h"
 #include "UI/TargetingUI/StrategyTargetingComponent.h"
 #include "UI/TargetingUI/TargetInfoWidget.h"
 #include "UnitStatusBarWidget.h"
 #include "Data/Unit/UnitData.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
@@ -346,9 +348,11 @@ float AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 
 	if (CurrentHealth <= 0)
 	{
+		float PlayedLength = 0.0f;
+
 		if (UnitData && UnitData->DeathReactMontage)
 		{
-			const float PlayedLength = PlayAnimMontage(UnitData->DeathReactMontage);
+			PlayedLength = PlayAnimMontage(UnitData->DeathReactMontage);
 			if (PlayedLength <= 0.0f)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Failed to play death montage for %s"), *GetName());
@@ -357,9 +361,10 @@ float AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 			{
 				UE_LOG(LogTemp, Log, TEXT("Play length is %f for %s"), PlayedLength, *GetName());
 			}
-
-			return PlayedLength;
 		}
+
+		ScheduleDeathRemoval(PlayedLength);
+		return PlayedLength;
 	}
 	else
 	{
@@ -380,6 +385,40 @@ float AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 	}
 
 	return 0.0f;
+}
+
+void AStrategyUnit::ScheduleDeathRemoval(float DelaySeconds)
+{
+	if (bDeathRemovalScheduled)
+	{
+		return;
+	}
+
+	bDeathRemovalScheduled = true;
+
+	StopMoving();
+	GetCharacterMovement()->DisableMovement();
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	SetTargetBracketVisible(false);
+	SetTargetInfoVisible(false);
+
+	if (StatusBarWidgetComponent)
+	{
+		StatusBarWidgetComponent->SetVisibility(false);
+	}
+
+	if (OwningSide)
+	{
+		OwningSide->RemoveUnit(this);
+		OwningSide = nullptr;
+	}
+
+	SetLifeSpan(FMath::Max(DelaySeconds, 0.1f));
 }
 
 bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
