@@ -18,14 +18,18 @@
 #include "StrategyGameMode.h"
 #include "Engine/OverlapResult.h"
 #include "TimerManager.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
+#include "Data/Weapon/StrategyWeaponData.h"
 #include "Blueprint/UserWidget.h"
 #include "TargetingUI/TargetingHUDWidget.h"
 
 #include "UI/EndTurnWidget.h"
 #include "UI/PlayerUnitRosterWidget.h"
 #include "UI/UnitActionBarWidget.h"
+#include "UI/WeaponInfoSlateWidget.h"
 #include "UI/TargetingUI//StrategyTargetingComponent.h"
 
 PRAGMA_DISABLE_OPTIMIZATION
@@ -52,6 +56,8 @@ void AStrategyPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	EnsureTargetingComponent();
+
 	if (IsLocalController() && TurnBannerWidgetClass)
 	{
 		TurnBannerWidget = CreateWidget<UTurnBannerWidget>(this, TurnBannerWidgetClass);
@@ -67,6 +73,7 @@ void AStrategyPlayerController::BeginPlay()
 		if (EndTurnWidget)
 		{
 			EndTurnWidget->AddToViewport(1000);
+			EndTurnWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 			EndTurnWidget->OnEndTurnClicked.AddDynamic(
 				this,
@@ -80,7 +87,8 @@ void AStrategyPlayerController::BeginPlay()
 		UnitActionBarWidget = CreateWidget<UUnitActionBarWidget>(this, UnitActionBarWidgetClass);
 		if (UnitActionBarWidget)
 		{
-			UnitActionBarWidget->AddToViewport(900);
+			UnitActionBarWidget->AddToViewport(1200);
+			UnitActionBarWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 			UnitActionBarWidget->OnUnitActionClicked.AddDynamic(
 				this,
 				&AStrategyPlayerController::HandleUnitActionClicked);
@@ -101,6 +109,9 @@ void AStrategyPlayerController::BeginPlay()
 		PlayerUnitRosterWidget->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
 		PlayerUnitRosterWidget->SetPositionInViewport(FVector2D(16.0f, 16.0f), false);
 		PlayerUnitRosterWidget->SetDesiredSizeInViewport(FVector2D(236.0f, 360.0f));
+		PlayerUnitRosterWidget->OnUnitClicked.AddDynamic(
+			this,
+			&AStrategyPlayerController::HandleRosterUnitClicked);
 	}
 	else
 	{
@@ -112,7 +123,7 @@ void AStrategyPlayerController::BeginPlay()
 		TargetingHUD = CreateWidget<UTargetingHUDWidget>(this, TargetingHUDClass);
 		if (TargetingHUD)
 		{
-			TargetingHUD->AddToViewport(1000);
+			TargetingHUD->AddToViewport(1300);
 			TargetingHUD->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
@@ -123,6 +134,7 @@ void AStrategyPlayerController::BeginPlay()
 	}
 
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
 
 	GetWorldTimerManager().SetTimerForNextTick(
 		FTimerDelegate::CreateUObject(this, &AStrategyPlayerController::RefreshPlayerUnitRoster));
@@ -262,11 +274,17 @@ void AStrategyPlayerController::DragSelectUnits(const TArray<AStrategyUnit*>& Un
 	}
 
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
 }
 
 const TArray<AStrategyUnit*>& AStrategyPlayerController::GetSelectedUnits()
 {
 	return ControlledUnits;
+}
+
+UStrategyTargetingComponent* AStrategyPlayerController::GetTargetingComponent()
+{
+	return EnsureTargetingComponent();
 }
 
 void AStrategyPlayerController::MoveCamera(const FInputActionValue& Value)
@@ -347,6 +365,11 @@ void AStrategyPlayerController::SelectHoldCompleted(const FInputActionValue& Val
 
 void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 {
+	if (GetWorld() && GetWorld()->GetRealTimeSeconds() < IgnoreSelectionInputUntilTime)
+	{
+		return;
+	}
+
 	/*
 	if (HighlightActor)
 	{
@@ -619,6 +642,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 	UpdateMovementHighlights();
 	RefreshActionBar();
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
 }
 
 void AStrategyPlayerController::DoSelectAllOnScreenCommand()
@@ -652,6 +676,7 @@ void AStrategyPlayerController::DoSelectAllOnScreenCommand()
 	}
 
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
 }
 
 void AStrategyPlayerController::DoDeselectAllCommand()
@@ -676,6 +701,7 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 	// clear the controlled units list
 	ControlledUnits.Empty();
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
 }
 
 void AStrategyPlayerController::DoDragScrollCommand()
@@ -1063,23 +1089,23 @@ bool AStrategyPlayerController::IsSelectableUnit(const AStrategyUnit* Unit) cons
 
 void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType ActionType)
 {
-	if (ControlledUnits.Num() != 1)
+	SuppressSelectionInputBriefly();
+
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!SelectedUnit && ControlledUnits.Num() > 0)
 	{
-		return;
+		SelectedUnit = ControlledUnits[0];
 	}
 	
-	AStrategyUnit* SelectedUnit = ControlledUnits[0];
-	
-	/*
 	if (!SelectedUnit)
 	{
 		return;
 	}
-*/
+
 	switch (ActionType)
 	{
 	case EPlayerUnitActionType::MeleeAttack:
-//		SelectedUnit->StartMeleeAttackMode();
+		SelectedUnit->StartMeleeAttackMode();
 		break;
 
 	case EPlayerUnitActionType::WeaponAttack:
@@ -1087,8 +1113,10 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 		break;
 
 	case EPlayerUnitActionType::Reload:
-//		SelectedUnit->ReloadWeapon();
+		SelectedUnit->ReloadWeapon();
 		RefreshActionBar();
+		RefreshPlayerUnitRoster();
+		RefreshWeaponInfoPanel();
 		break;
 
 	case EPlayerUnitActionType::HunkerDown:
@@ -1111,15 +1139,60 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 	}
 }
 
-void AStrategyPlayerController::RefreshActionBar()
+void AStrategyPlayerController::HandleRosterUnitClicked(AStrategyUnit* Unit)
 {
-	if (ControlledUnits.Num() != 1)
+	SelectRosterUnit(Unit);
+	CenterCameraOnUnit(Unit);
+}
+
+void AStrategyPlayerController::SelectRosterUnit(AStrategyUnit* Unit)
+{
+	if (!IsSelectableUnit(Unit))
 	{
 		return;
 	}
+
+	DoDeselectAllCommand();
+
+	TargetUnit = Unit;
+	ControlledUnits.Add(Unit);
+	Unit->UnitSelected();
+
+	UpdateMovementHighlights();
+	RefreshActionBar();
+	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
+}
+
+void AStrategyPlayerController::CenterCameraOnUnit(const AStrategyUnit* Unit)
+{
+	if (!Unit || !ControlledPawn)
+	{
+		return;
+	}
+
+	const FVector CurrentPawnLocation = ControlledPawn->GetActorLocation();
+	const FVector UnitLocation = Unit->GetActorLocation();
+
+	ControlledPawn->SetActorLocation(FVector(
+		UnitLocation.X,
+		UnitLocation.Y,
+		CurrentPawnLocation.Z));
+}
+
+void AStrategyPlayerController::RefreshActionBar()
+{
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(SelectedUnit) || SelectedUnit->GetCurrentHealth() <= 0)
+	{
+		if (UnitActionBarWidget)
+		{
+			UnitActionBarWidget->SetActions({});
+		}
+		return;
+	}
 	
-	AStrategyUnit* SelectedUnit = ControlledUnits[0];
-	if (!UnitActionBarWidget || !SelectedUnit)
+	if (!UnitActionBarWidget)
 	{
 		return;
 	}
@@ -1137,15 +1210,14 @@ void AStrategyPlayerController::RefreshActionBar()
 	}
 	
 	TArray<FUnitActionButtonData> Actions;
-/*
+
 	Actions.Add({
 		EPlayerUnitActionType::MeleeAttack,
 		FText::FromString("Melee"),
 		nullptr,
-		SelectedUnit->CanMeleeAttack(),
+		SelectedUnit->CanMeleeAttack(EnemySide),
 		FText::FromString("No AP or no target")
 	});
-*/
 	
 	
 	Actions.Add({
@@ -1156,7 +1228,6 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("No ammo or no AP")
 	});
 	
-/*
 	Actions.Add({
 		EPlayerUnitActionType::Reload,
 		FText::FromString("Reload"),
@@ -1165,6 +1236,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Weapon is full or no AP")
 	});
 
+/*
 	Actions.Add({
 		EPlayerUnitActionType::HunkerDown,
 		FText::FromString("Hunker"),
@@ -1218,32 +1290,102 @@ AStrategyGameMode* AStrategyPlayerController::GetStrategyGameMode() const
 	return World ? Cast<AStrategyGameMode>(World->GetAuthGameMode()) : nullptr;
 }
 
+UStrategyTargetingComponent* AStrategyPlayerController::EnsureTargetingComponent()
+{
+	if (TargetingComponent)
+	{
+		return TargetingComponent;
+	}
+
+	TargetingComponent = NewObject<UStrategyTargetingComponent>(
+		this,
+		UStrategyTargetingComponent::StaticClass(),
+		TEXT("TargetingComponentRuntime"));
+
+	if (TargetingComponent)
+	{
+		AddInstanceComponent(TargetingComponent);
+		TargetingComponent->RegisterComponent();
+		UE_LOG(LogTemp, Warning, TEXT("StrategyPlayerController recreated missing TargetingComponent at runtime."));
+	}
+
+	return TargetingComponent;
+}
+
 void AStrategyPlayerController::RemoveTacticalHUD() const
 {
-	EndTurnWidget->SetVisibility(ESlateVisibility::Collapsed);
-	UnitActionBarWidget->SetVisibility(ESlateVisibility::Collapsed);
-	TurnBannerWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (EndTurnWidget)
+	{
+		EndTurnWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (UnitActionBarWidget)
+	{
+		UnitActionBarWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (TurnBannerWidget)
+	{
+		TurnBannerWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void AStrategyPlayerController::ShowTacticalHUD()
 {
-	EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
-	UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
-	TurnBannerWidget->SetVisibility(ESlateVisibility::Visible);
+	RestoreTacticalView();
+
+	if (EndTurnWidget)
+	{
+		EndTurnWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+	if (UnitActionBarWidget)
+	{
+		UnitActionBarWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+	if (TurnBannerWidget)
+	{
+		TurnBannerWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
 	if (PlayerUnitRosterWidget)
 	{
 		PlayerUnitRosterWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	RefreshActionBar();
 	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
+}
+
+void AStrategyPlayerController::RestoreTacticalView(float BlendTime)
+{
+	if (!ControlledPawn)
+	{
+		ControlledPawn = Cast<AStrategyPawn>(GetPawn());
+	}
+
+	if (ControlledPawn && GetViewTarget() != ControlledPawn)
+	{
+		SetViewTargetWithBlend(
+			ControlledPawn,
+			BlendTime,
+			EViewTargetBlendFunction::VTBlend_Cubic);
+	}
+
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+
+	FInputModeGameAndUI TacticalInputMode;
+	TacticalInputMode.SetHideCursorDuringCapture(false);
+	TacticalInputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(TacticalInputMode);
 }
 
 void AStrategyPlayerController::ShowTargetingHUD()
 {
 	if (TargetingHUD)
 	{
-		TargetingHUD->SetVisibility(ESlateVisibility::Visible);
+		TargetingHUD->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
+
+	RefreshWeaponInfoPanel();
 
 	if (EndTurnWidget)
 	{
@@ -1273,15 +1415,57 @@ void AStrategyPlayerController::HideTargetingHUD()
 	{
 		TargetingHUD->SetVisibility(ESlateVisibility::Collapsed);
 	}
-	
+
 	if (EndTurnWidget)
 	{
-		EndTurnWidget->SetVisibility(ESlateVisibility::Visible);
+		EndTurnWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 
 	if (UnitActionBarWidget)
 	{
-		UnitActionBarWidget->SetVisibility(ESlateVisibility::Visible);
+		UnitActionBarWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+
+	RefreshWeaponInfoPanel();
+}
+
+void AStrategyPlayerController::RefreshWeaponInfoPanel()
+{
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(SelectedUnit) || SelectedUnit->GetCurrentHealth() <= 0)
+	{
+		SelectedUnit = nullptr;
+	}
+
+	EnsureWeaponInfoSlateWidget();
+	UpdateWeaponInfoSlateWidget(SelectedUnit);
+}
+
+void AStrategyPlayerController::SuppressSelectionInputBriefly()
+{
+	if (GetWorld())
+	{
+		IgnoreSelectionInputUntilTime = GetWorld()->GetRealTimeSeconds() + 0.15f;
+	}
+}
+
+void AStrategyPlayerController::EnsureWeaponInfoSlateWidget()
+{
+	if (WeaponInfoSlateWidget.IsValid() || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+
+	WeaponInfoSlateWidget = SNew(SWeaponInfoSlateWidget);
+
+	GEngine->GameViewport->AddViewportWidgetContent(WeaponInfoSlateWidget.ToSharedRef(), 5000);
+}
+
+void AStrategyPlayerController::UpdateWeaponInfoSlateWidget(AStrategyUnit* SelectedUnit)
+{
+	if (WeaponInfoSlateWidget.IsValid())
+	{
+		WeaponInfoSlateWidget->SetUnit(SelectedUnit);
 	}
 }
 

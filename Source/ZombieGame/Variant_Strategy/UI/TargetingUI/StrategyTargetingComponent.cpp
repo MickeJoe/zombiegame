@@ -14,19 +14,34 @@ UStrategyTargetingComponent::UStrategyTargetingComponent()
 	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
-void UStrategyTargetingComponent::EnterFireMode(
+bool UStrategyTargetingComponent::EnterFireMode(
 	AStrategyUnit* InAttacker,
 	const TArray<AStrategyUnit*>& InTargets)
 {
+	return EnterAttackMode(InAttacker, InTargets, EStrategyTargetingMode::Fire);
+}
+
+bool UStrategyTargetingComponent::EnterMeleeMode(
+	AStrategyUnit* InAttacker,
+	const TArray<AStrategyUnit*>& InTargets)
+{
+	return EnterAttackMode(InAttacker, InTargets, EStrategyTargetingMode::Melee);
+}
+
+bool UStrategyTargetingComponent::EnterAttackMode(
+	AStrategyUnit* InAttacker,
+	const TArray<AStrategyUnit*>& InTargets,
+	EStrategyTargetingMode InMode)
+{
 	if (!InAttacker || InTargets.Num() == 0)
 	{
-		return;
+		return false;
 	}
 	
 	UTargetingHUDWidget* TargetingHUD = GetTargetingHUDWidget();
 	if (!TargetingHUD)
 	{
-		return;
+		return false;
 	}
 
 	TargetingHUD->OnCycleTargetClicked.AddUniqueDynamic(
@@ -54,14 +69,16 @@ void UStrategyTargetingComponent::EnterFireMode(
 
 	if (Targets.Num() == 0)
 	{
-		return;
+		return false;
 	}
 
 	CurrentTargetIndex = 0;
+	TargetingMode = InMode;
 	bIsInFireMode = true;
 
 	FocusCurrentTarget();
 	EnterCameraView();
+	return true;
 }
 
 void UStrategyTargetingComponent::FocusCurrentTarget()
@@ -82,7 +99,9 @@ void UStrategyTargetingComponent::FocusCurrentTarget()
 
 	if (UTargetInfoWidget* TargetInfoWidget = Target->GetTargetInfoWidget())
 	{
-		const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
+		const FStrategyAttackContext Context = TargetingMode == EStrategyTargetingMode::Melee
+			? UStrategyAttackResolver::MakeContextWithAttackStats(Attacker, Target, Attacker->GetMeleeAttackStats())
+			: UStrategyAttackResolver::MakeContext(Attacker, Target);
 		TargetInfoWidget->SetHitChance(UStrategyAttackResolver::CalculateHitChance(Context));
 		TargetInfoWidget->SetCritChance(UStrategyAttackResolver::CalculateCriticalChance(Context));
 	}
@@ -105,6 +124,10 @@ void UStrategyTargetingComponent::EnterCameraView()
 	}
 
 	PreviousViewTarget = PC->GetViewTarget();
+	if (!PreviousViewTarget)
+	{
+		PreviousViewTarget = PC->GetPawn();
+	}
 
 	PC->SetViewTargetWithBlend(
 		Attacker,
@@ -155,7 +178,14 @@ void UStrategyTargetingComponent::ExitFireMode()
 		TargetingHUD->OnFireClicked.RemoveAll(this);
 	}
 
-	if (PC && PreviousViewTarget)
+	AStrategyPlayerController* StrategyPC = Cast<AStrategyPlayerController>(PC);
+
+	if (StrategyPC)
+	{
+		StrategyPC->SuppressSelectionInputBriefly();
+		StrategyPC->RestoreTacticalView();
+	}
+	else if (PC && PreviousViewTarget)
 	{
 		PC->SetViewTargetWithBlend(
 			PreviousViewTarget,
@@ -184,12 +214,12 @@ void UStrategyTargetingComponent::ExitFireMode()
 
 	bIsInFireMode = false;
 	bIsResolvingAttack = false;
+	TargetingMode = EStrategyTargetingMode::Fire;
 	Attacker = nullptr;
 	Targets.Reset();
 	CurrentTargetIndex = INDEX_NONE;
 	PreviousViewTarget = nullptr;
 	
-	AStrategyPlayerController* StrategyPC = Cast<AStrategyPlayerController>(PC);
 	if (!StrategyPC)
 	{
 		return;
@@ -197,6 +227,11 @@ void UStrategyTargetingComponent::ExitFireMode()
 	
 	StrategyPC->HideTargetingHUD();
 	StrategyPC->ShowTacticalHUD();
+}
+
+void UStrategyTargetingComponent::RequestExitFireMode()
+{
+	ExitFireMode();
 }
 
 void UStrategyTargetingComponent::CompleteDelayedExitFireMode()
@@ -218,9 +253,29 @@ void UStrategyTargetingComponent::HandleFireClicked()
 		return;
 	}
 
-	const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
+	const FStrategyAttackContext Context = TargetingMode == EStrategyTargetingMode::Melee
+		? UStrategyAttackResolver::MakeContextWithAttackStats(Attacker, Target, Attacker->GetMeleeAttackStats())
+		: UStrategyAttackResolver::MakeContext(Attacker, Target);
+	if (!Context.AttackStats)
+	{
+		return;
+	}
+
 	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
-	Attacker->SpendWeaponAttackResources();
+	if (TargetingMode == EStrategyTargetingMode::Melee)
+	{
+		Attacker->SpendMeleeAttackResources();
+	}
+	else
+	{
+		Attacker->SpendWeaponAttackResources();
+	}
+
+	if (AStrategyPlayerController* StrategyPC = Cast<AStrategyPlayerController>(GetOwner()))
+	{
+		StrategyPC->SuppressSelectionInputBriefly();
+		StrategyPC->RefreshWeaponInfoPanel();
+	}
 
 	bIsResolvingAttack = true;
 	ExitFireModeAfterDelay(Result.ReactionMontageDuration);

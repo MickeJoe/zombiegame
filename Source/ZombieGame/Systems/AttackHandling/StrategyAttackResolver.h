@@ -60,6 +60,7 @@ class UStrategyAttackResolver : public UObject
 
 public:
 	static FStrategyAttackContext MakeContext(AStrategyUnit* Attacker, AStrategyUnit* Target);
+	static FStrategyAttackContext MakeContextWithAttackStats(AStrategyUnit* Attacker, AStrategyUnit* Target, const FAttackStats* AttackStats);
 	static int32 CalculateDistanceInCells(const FStrategyAttackContext& Context);
 	static int32 CalculateHitChance(const FStrategyAttackContext& Context);
 	static int32 CalculateCriticalChance(const FStrategyAttackContext& Context);

@@ -12,6 +12,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Data/Unit/UnitData.h"
+#include "Input/Reply.h"
 #include "StrategyUnit.h"
 #include "Widgets/SWidget.h"
 
@@ -23,6 +24,7 @@ namespace
 	const FLinearColor TextWhite(0.92f, 0.95f, 0.98f, 1.0f);
 	const FLinearColor TextMuted(0.74f, 0.78f, 0.82f, 1.0f);
 	const FLinearColor AccentBlue(0.0f, 0.72f, 1.0f, 1.0f);
+	const FLinearColor AccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
 	const FLinearColor HealthGreen(0.18f, 0.95f, 0.38f, 1.0f);
 	const FLinearColor HealthEmpty(0.18f, 0.95f, 0.38f, 0.20f);
 	const FLinearColor ActionBlue(0.0f, 0.74f, 1.0f, 1.0f);
@@ -99,7 +101,7 @@ void UPlayerUnitRosterCardWidget::NativeOnInitialized()
 void UPlayerUnitRosterCardWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	SetVisibility(ESlateVisibility::HitTestInvisible);
+	SetVisibility(ESlateVisibility::Visible);
 
 	if (WidgetTree && (!Border_Background || !Image_Icon || !Text_Name || !Text_Health || !Text_ActionPoints))
 	{
@@ -123,6 +125,19 @@ void UPlayerUnitRosterCardWidget::SetEntry(const FPlayerUnitRosterEntry& InEntry
 {
 	Entry = InEntry;
 	Refresh();
+}
+
+FReply UPlayerUnitRosterCardWidget::NativeOnMouseButtonDown(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && IsValid(Entry.Unit))
+	{
+		OnUnitClicked.Broadcast(Entry.Unit);
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
 void UPlayerUnitRosterCardWidget::BuildDefaultLayout()
@@ -159,11 +174,33 @@ void UPlayerUnitRosterCardWidget::BuildDefaultLayout()
 	Text_Name = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_Name"));
 	TextStack->AddChildToVerticalBox(Text_Name);
 
+	UHorizontalBox* HealthRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HorizontalBox_Health"));
+	TextStack->AddChildToVerticalBox(HealthRow);
+
 	Text_Health = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_Health"));
-	TextStack->AddChildToVerticalBox(Text_Health);
+	Text_Health->SetText(FText::FromString(TEXT("HP")));
+	if (UHorizontalBoxSlot* HealthLabelSlot = HealthRow->AddChildToHorizontalBox(Text_Health))
+	{
+		HealthLabelSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+		HealthLabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	}
+
+	Text_HealthValue = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_HealthValue"));
+	HealthRow->AddChildToHorizontalBox(Text_HealthValue);
+
+	UHorizontalBox* ActionPointRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HorizontalBox_ActionPoints"));
+	TextStack->AddChildToVerticalBox(ActionPointRow);
 
 	Text_ActionPoints = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_ActionPoints"));
-	TextStack->AddChildToVerticalBox(Text_ActionPoints);
+	Text_ActionPoints->SetText(FText::FromString(TEXT("AP")));
+	if (UHorizontalBoxSlot* ActionLabelSlot = ActionPointRow->AddChildToHorizontalBox(Text_ActionPoints))
+	{
+		ActionLabelSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+		ActionLabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	}
+
+	Text_ActionPointsValue = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_ActionPointsValue"));
+	ActionPointRow->AddChildToHorizontalBox(Text_ActionPointsValue);
 }
 
 void UPlayerUnitRosterCardWidget::Refresh()
@@ -189,25 +226,51 @@ void UPlayerUnitRosterCardWidget::Refresh()
 	if (Text_Name)
 	{
 		Text_Name->SetText(Entry.DisplayName.IsEmpty() ? FText::FromString(TEXT("UNIT")) : Entry.DisplayName);
-		SetTextStyle(Text_Name, TextWhite, 15);
+		SetTextStyle(Text_Name, AccentBlue, 15);
 	}
 
 	if (Text_Health)
+	{
+		Text_Health->SetText(FText::FromString(TEXT("HP")));
+		SetTextStyle(Text_Health, TextWhite, 13);
+	}
+
+	if (Text_HealthValue)
+	{
+		Text_HealthValue->SetText(FText::Format(
+			NSLOCTEXT("PlayerUnitRoster", "HealthValueFormat", "{0}/{1}"),
+			FText::AsNumber(Entry.CurrentHealth),
+			FText::AsNumber(Entry.MaxHealth)));
+		SetTextStyle(Text_HealthValue, AccentYellow, 13);
+	}
+	else if (Text_Health)
 	{
 		Text_Health->SetText(FText::Format(
 			NSLOCTEXT("PlayerUnitRoster", "HealthFormat", "HP {0}/{1}"),
 			FText::AsNumber(Entry.CurrentHealth),
 			FText::AsNumber(Entry.MaxHealth)));
-		SetTextStyle(Text_Health, TextMuted, 13);
 	}
 
 	if (Text_ActionPoints)
+	{
+		Text_ActionPoints->SetText(FText::FromString(TEXT("AP")));
+		SetTextStyle(Text_ActionPoints, TextWhite, 13);
+	}
+
+	if (Text_ActionPointsValue)
+	{
+		Text_ActionPointsValue->SetText(FText::Format(
+			NSLOCTEXT("PlayerUnitRoster", "ActionPointValueFormat", "{0}/{1}"),
+			FText::AsNumber(Entry.CurrentActionPoints),
+			FText::AsNumber(Entry.MaxActionPoints)));
+		SetTextStyle(Text_ActionPointsValue, AccentYellow, 13);
+	}
+	else if (Text_ActionPoints)
 	{
 		Text_ActionPoints->SetText(FText::Format(
 			NSLOCTEXT("PlayerUnitRoster", "ActionPointFormat", "AP {0}/{1}"),
 			FText::AsNumber(Entry.CurrentActionPoints),
 			FText::AsNumber(Entry.MaxActionPoints)));
-		SetTextStyle(Text_ActionPoints, AccentBlue, 13);
 	}
 }
 
@@ -224,7 +287,7 @@ void UPlayerUnitRosterWidget::NativeOnInitialized()
 void UPlayerUnitRosterWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	SetVisibility(ESlateVisibility::HitTestInvisible);
+	SetVisibility(ESlateVisibility::Visible);
 
 	if (WidgetTree && !VerticalBox_Units)
 	{
@@ -284,93 +347,45 @@ void UPlayerUnitRosterWidget::SetUnits(
 			continue;
 		}
 
-		UBorder* RowBackground = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		RowBackground->SetPadding(FMargin(5.0f));
-		RowBackground->SetBrushColor(SelectedUnits.Contains(Unit) ? CardSelectedBackground : CardBackground);
-
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		RowBackground->SetContent(Row);
-
-		USizeBox* PortraitBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		PortraitBox->SetWidthOverride(64.0f);
-		PortraitBox->SetHeightOverride(64.0f);
-
-		UImage* PortraitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
-		if (Unit->UnitData && Unit->UnitData->Icon)
+		TSubclassOf<UPlayerUnitRosterCardWidget> WidgetClass = CardWidgetClass;
+		if (!WidgetClass)
 		{
-			PortraitImage->SetBrushFromTexture(Unit->UnitData->Icon);
-			PortraitImage->SetColorAndOpacity(FLinearColor::White);
-		}
-		else
-		{
-			PortraitImage->SetColorAndOpacity(PortraitFallback);
-		}
-		PortraitBox->AddChild(PortraitImage);
-
-		UHorizontalBoxSlot* PortraitSlot = Row->AddChildToHorizontalBox(PortraitBox);
-		if (PortraitSlot)
-		{
-			PortraitSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
-			PortraitSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-			PortraitSlot->SetVerticalAlignment(VAlign_Center);
+			WidgetClass = UPlayerUnitRosterCardWidget::StaticClass();
 		}
 
-		UVerticalBox* InfoStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		UHorizontalBoxSlot* InfoSlot = Row->AddChildToHorizontalBox(InfoStack);
-		if (InfoSlot)
+		UPlayerUnitRosterCardWidget* Card = CreateWidget<UPlayerUnitRosterCardWidget>(GetOwningPlayer(), WidgetClass);
+		if (!Card)
 		{
-			InfoSlot->SetVerticalAlignment(VAlign_Center);
-			InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			continue;
 		}
 
-		const FText UnitName = Unit->UnitData && !Unit->UnitData->DisplayName.IsEmpty()
+		FPlayerUnitRosterEntry Entry;
+		Entry.Unit = Unit;
+		Entry.DisplayName = Unit->UnitData && !Unit->UnitData->DisplayName.IsEmpty()
 			? Unit->UnitData->DisplayName
 			: FText::FromName(Unit->GetFName());
+		Entry.Icon = Unit->UnitData ? Unit->UnitData->Icon : nullptr;
+		Entry.CurrentHealth = Unit->GetCurrentHealth();
+		Entry.MaxHealth = Unit->GetMaxHealth();
+		Entry.CurrentActionPoints = Unit->GetRemainingActionPoints();
+		Entry.MaxActionPoints = Unit->GetMaxActionPoints();
+		Entry.bSelected = SelectedUnits.Contains(Unit);
 
-		UTextBlock* NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		NameText->SetText(UnitName);
-		SetTextStyle(NameText, TextWhite, 15);
-		InfoStack->AddChildToVerticalBox(NameText);
+		Card->SetEntry(Entry);
+		Card->OnUnitClicked.AddDynamic(this, &UPlayerUnitRosterWidget::HandleCardUnitClicked);
 
-		UTextBlock* HealthText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		HealthText->SetText(FText::Format(
-			NSLOCTEXT("PlayerUnitRoster", "HealthFormat", "HP {0}/{1}"),
-			FText::AsNumber(Unit->GetCurrentHealth()),
-			FText::AsNumber(Unit->GetMaxHealth())));
-		SetTextStyle(HealthText, TextMuted, 13);
-		InfoStack->AddChildToVerticalBox(HealthText);
-
-		AddSegmentBar(
-			WidgetTree,
-			InfoStack,
-			Unit->GetCurrentHealth(),
-			Unit->GetMaxHealth(),
-			HealthGreen,
-			HealthEmpty);
-
-		UTextBlock* ActionText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		ActionText->SetText(FText::Format(
-			NSLOCTEXT("PlayerUnitRoster", "ActionPointFormat", "AP {0}/{1}"),
-			FText::AsNumber(Unit->GetRemainingActionPoints()),
-			FText::AsNumber(Unit->GetMaxActionPoints())));
-		SetTextStyle(ActionText, AccentBlue, 13);
-		InfoStack->AddChildToVerticalBox(ActionText);
-
-		AddSegmentBar(
-			WidgetTree,
-			InfoStack,
-			Unit->GetRemainingActionPoints(),
-			Unit->GetMaxActionPoints(),
-			ActionBlue,
-			ActionEmpty);
-
-		UVerticalBoxSlot* CardSlot = VerticalBox_Units->AddChildToVerticalBox(RowBackground);
+		UVerticalBoxSlot* CardSlot = VerticalBox_Units->AddChildToVerticalBox(Card);
 		if (CardSlot)
 		{
 			CardSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
 			CardSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 		}
 	}
+}
+
+void UPlayerUnitRosterWidget::HandleCardUnitClicked(AStrategyUnit* Unit)
+{
+	OnUnitClicked.Broadcast(Unit);
 }
 
 void UPlayerUnitRosterWidget::BuildDefaultLayout()

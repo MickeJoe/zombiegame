@@ -44,6 +44,16 @@ FStrategyAttackContext UStrategyAttackResolver::MakeContext(AStrategyUnit* Attac
 	return Context;
 }
 
+FStrategyAttackContext UStrategyAttackResolver::MakeContextWithAttackStats(
+	AStrategyUnit* Attacker,
+	AStrategyUnit* Target,
+	const FAttackStats* AttackStats)
+{
+	FStrategyAttackContext Context = MakeContext(Attacker, Target);
+	Context.AttackStats = AttackStats;
+	return Context;
+}
+
 int32 UStrategyAttackResolver::CalculateDistanceInCells(const FStrategyAttackContext& Context)
 {
 	if (!Context.Attacker || !Context.Target)

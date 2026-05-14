@@ -36,6 +36,7 @@ class UUnitActionBarWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	
 	UFUNCTION(BlueprintCallable)
@@ -67,4 +68,23 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> Button_Skip;
+
+private:
+	UFUNCTION()
+	void HandleMeleeClicked();
+
+	UFUNCTION()
+	void HandleFireClicked();
+
+	UFUNCTION()
+	void HandleReloadClicked();
+
+	UFUNCTION()
+	void HandleHunkerClicked();
+
+	UFUNCTION()
+	void HandleOverwatchClicked();
+
+	UFUNCTION()
+	void HandleSkipClicked();
 };

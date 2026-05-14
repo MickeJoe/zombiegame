@@ -8,6 +8,7 @@
 #include "StrategyPlayerController.generated.h"
 
 enum class EPlayerUnitActionType : uint8;
+class SWeaponInfoSlateWidget;
 class UTargetingHUDWidget;
 class UTargetingActionBarWidget;
 class UStrategyTargetingComponent;
@@ -197,6 +198,8 @@ protected:
 	/** Game time when the player last completed a box select on the touchscreen */
 	float LastBoxSelectTime = 0.0f;
 
+	float IgnoreSelectionInputUntilTime = 0.0f;
+
 	/** Max time between touch press and release to be considered a tap */
 	UPROPERTY(EditAnywhere, Category = "Touch Input", meta = (ClampMin = 0, ClampMax = 1, Units="s"))
 	float TouchTapMaxAllowedTime = 0.15f;
@@ -224,14 +227,17 @@ public:
 	/** Passes the list of selected units */
 	const TArray<AStrategyUnit*>& GetSelectedUnits();
 	
-	UStrategyTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
+	UStrategyTargetingComponent* GetTargetingComponent();
 	UTargetingHUDWidget* GetTargetingHUDWidget() const { return TargetingHUD; }
 	
 	void RemoveTacticalHUD() const;
 	void ShowTacticalHUD();
+	void RestoreTacticalView(float BlendTime = 0.25f);
 	
 	void ShowTargetingHUD();
 	void HideTargetingHUD();
+	void RefreshWeaponInfoPanel();
+	void SuppressSelectionInputBriefly();
 
 protected:
 
@@ -267,7 +273,7 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UTargetingHUDWidget> TargetingHUD;
-	
+
 	UFUNCTION()
 	void HandleEndTurnClicked();
 	
@@ -372,6 +378,12 @@ protected:
 	
 	UFUNCTION()
 	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);
+
+	UFUNCTION()
+	void HandleRosterUnitClicked(AStrategyUnit* Unit);
+
+	void SelectRosterUnit(AStrategyUnit* Unit);
+	void CenterCameraOnUnit(const AStrategyUnit* Unit);
 public:
 	void RefreshActionBar();
 protected:
@@ -387,5 +399,10 @@ protected:
 	
 private:
 	AStrategyGameMode* GetStrategyGameMode() const;
+	UStrategyTargetingComponent* EnsureTargetingComponent();
+	void EnsureWeaponInfoSlateWidget();
+	void UpdateWeaponInfoSlateWidget(AStrategyUnit* SelectedUnit);
+
+	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;
 	
 };

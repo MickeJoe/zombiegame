@@ -36,7 +36,7 @@ void UEnemyUnitAI::TakeTurn(
 
 void UEnemyUnitAI::ExecuteNextAction()
 {
-	if (!OwnerUnit || OwnerUnit->GetRemainingActionPoints() <= 0)
+	if (!IsValid(OwnerUnit) || OwnerUnit->GetCurrentHealth() <= 0 || OwnerUnit->GetRemainingActionPoints() <= 0)
 	{
 		FinishUnitTurn();
 		return;
@@ -160,8 +160,9 @@ void UEnemyUnitAI::OnMoveCompleted(AStrategyUnit* MovedUnit)
 		return;
 	}
 
-	if (!OwnerUnit)
+	if (!IsValid(OwnerUnit) || OwnerUnit->GetCurrentHealth() <= 0)
 	{
+		FinishUnitTurn();
 		return;
 	}
 

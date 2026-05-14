@@ -2,6 +2,7 @@
 
 #include "PlayerStrategySide.h"
 #include "../Variant_Strategy/StrategyGameMode.h"
+#include "../Variant_Strategy/StrategyUnit.h"
 #include "Enemy_AI/WalkerEnemyAI.h"
 #include "Systems/SightManager.h"
 
@@ -14,6 +15,7 @@ void AAIStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* SightMa
 	CachedSightManager = SightManager;
 	
 	CurrentUnitIndex = 0;
+	ActiveTurnUnits = GetAliveUnits();
 	SightManager->UpdateEnemySight();
 	StartNextEnemyUnitTurn();
 }
@@ -25,13 +27,13 @@ void AAIStrategySide::OnEnemyUnitTurnDone(AStrategyUnit* Unit)
 
 void AAIStrategySide::StartNextEnemyUnitTurn()
 {
-	while (Units.IsValidIndex(CurrentUnitIndex))
+	while (ActiveTurnUnits.IsValidIndex(CurrentUnitIndex))
 	{
-		AStrategyUnit* Unit = Units[CurrentUnitIndex];
+		AStrategyUnit* Unit = ActiveTurnUnits[CurrentUnitIndex];
 
 		++CurrentUnitIndex;
 
-		if (!Unit || !Unit->GetEnemyAI())
+		if (!IsValid(Unit) || Unit->GetCurrentHealth() <= 0 || !Unit->GetEnemyAI())
 		{
 			continue;
 		}
@@ -53,6 +55,9 @@ void AAIStrategySide::StartNextEnemyUnitTurn()
 
 void AAIStrategySide::OnTurnDone()
 {
+	ActiveTurnUnits.Reset();
+	CurrentUnitIndex = 0;
+
 	if (AStrategyGameMode* GM = GetWorld()->GetAuthGameMode<AStrategyGameMode>())
 	{
 		GM->EndTurn();

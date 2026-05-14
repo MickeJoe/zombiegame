@@ -4,6 +4,24 @@
 
 PRAGMA_DISABLE_OPTIMIZATION
 
+void UUnitActionBarWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+
+	if (Button_Melee)     Button_Melee->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleMeleeClicked);
+	if (Button_Fire)      Button_Fire->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleFireClicked);
+	if (Button_Reload)    Button_Reload->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleReloadClicked);
+	if (Button_Hunker)    Button_Hunker->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleHunkerClicked);
+	if (Button_Overwatch) Button_Overwatch->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleOverwatchClicked);
+	if (Button_Skip)      Button_Skip->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleSkipClicked);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("ActionBar initialized. ReloadButton=%s"),
+		Button_Reload ? *Button_Reload->GetName() : TEXT("NULL"));
+}
+
 void UUnitActionBarWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -70,6 +88,14 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 		Button_Reload->SetIsEnabled(bCanReload);
 	}
 
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("ActionBar SetActions: Fire=%d Reload=%d ReloadButton=%s"),
+		bCanFire ? 1 : 0,
+		bCanReload ? 1 : 0,
+		Button_Reload ? *Button_Reload->GetName() : TEXT("NULL"));
+
 	if (Button_Hunker)
 	{
 		Button_Hunker->SetIsEnabled(bCanHunkerDown);
@@ -84,6 +110,37 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 void UUnitActionBarWidget::OnActionClicked(EPlayerUnitActionType ActionType)
 {
 	OnUnitActionClicked.Broadcast(ActionType);
+}
+
+void UUnitActionBarWidget::HandleMeleeClicked()
+{
+	OnActionClicked(EPlayerUnitActionType::MeleeAttack);
+}
+
+void UUnitActionBarWidget::HandleFireClicked()
+{
+	OnActionClicked(EPlayerUnitActionType::WeaponAttack);
+}
+
+void UUnitActionBarWidget::HandleReloadClicked()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ActionBar Reload pressed"));
+	OnActionClicked(EPlayerUnitActionType::Reload);
+}
+
+void UUnitActionBarWidget::HandleHunkerClicked()
+{
+	OnActionClicked(EPlayerUnitActionType::HunkerDown);
+}
+
+void UUnitActionBarWidget::HandleOverwatchClicked()
+{
+	OnActionClicked(EPlayerUnitActionType::Overwatch);
+}
+
+void UUnitActionBarWidget::HandleSkipClicked()
+{
+	OnActionClicked(EPlayerUnitActionType::SkipTurn);
 }
 
 PRAGMA_ENABLE_OPTIMIZATION

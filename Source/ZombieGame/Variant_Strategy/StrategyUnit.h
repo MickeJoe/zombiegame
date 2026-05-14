@@ -116,6 +116,7 @@ public:
 	int32 GetMaxArmor() const;
 
 	FAttackStats GetBiteAttackStats() const;
+	const FAttackStats* GetMeleeAttackStats() const;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
@@ -130,9 +131,14 @@ public:
 	
 	void UpdateStatusBar();
 	
+	bool CanMeleeAttack(AAIStrategySide* EnemySide) const;
 	bool CanWeaponAttack(AAIStrategySide* EnemySide) const;
+	void SpendMeleeAttackResources();
 	void SpendWeaponAttackResources();
+	void StartMeleeAttackMode();
 	void StartWeaponAttackMode();
+	bool CanReload() const;
+	void ReloadWeapon();
 
 protected:
 
@@ -169,7 +175,9 @@ public:
 	float ApplyDamage(const FWeaponDamage& WeaponDamage);
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
-	const FStrategyWeaponInstance& GetEquippedWeapon() const { return EquippedWeapon; }
+	const FStrategyWeaponInstance& GetEquippedWeapon() const { return GetEquippedFireWeapon(); }
+	const FStrategyWeaponInstance& GetEquippedFireWeapon() const;
+	const FStrategyWeaponInstance& GetEquippedMeleeWeapon() const;
 	
 	UTargetInfoWidget* GetTargetInfoWidget() const { return TargetInfoWidget; }
 	
@@ -180,7 +188,16 @@ public:
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FStrategyWeaponInstance EquippedWeapon;
+	FStrategyWeaponInstance OneHandedFireWeapon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FStrategyWeaponInstance OneHandedMeleeWeapon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FStrategyWeaponInstance TwoHandedWeapon;
+
+	UPROPERTY(Transient)
+	FStrategyWeaponInstance EmptyWeaponInstance;
 	
 	int32 UsedActionPoints = 0;
 	int32 CurrentHealth = 0;
@@ -207,6 +224,7 @@ protected:
 
 private:
 	TArray<AStrategyUnit*> GetEnemiesInRange() const;
+	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
 	void ScheduleDeathRemoval(float DelaySeconds);
 	
 	AStrategyGameMode* GetStrategyGameMode() const;	

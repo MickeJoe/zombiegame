@@ -1,11 +1,19 @@
 ﻿#pragma once
 
+#include "CoreMinimal.h"
 #include "TimerManager.h"
 #include "StrategyTargetingComponent.generated.h"
 
 class UTargetingHUDWidget;
 class UTargetingActionBarWidget;
 class AStrategyUnit;
+
+UENUM()
+enum class EStrategyTargetingMode : uint8
+{
+	Fire,
+	Melee
+};
 
 UCLASS()
 class UStrategyTargetingComponent : public UActorComponent
@@ -15,13 +23,18 @@ class UStrategyTargetingComponent : public UActorComponent
 public:
 	UStrategyTargetingComponent();
 	
-	void EnterFireMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets);
+	bool EnterFireMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets);
+	bool EnterMeleeMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets);
 	bool IsInFireMode() const { return bIsInFireMode; }
+
+	UFUNCTION(BlueprintCallable)
+	void RequestExitFireMode();
 	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 
 private:
+	bool EnterAttackMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets, EStrategyTargetingMode InMode);
 	void FocusCurrentTarget();
 	void EnterCameraView();
 	
@@ -51,6 +64,7 @@ private:
 	TObjectPtr<AActor> PreviousViewTarget;
 
 	int32 CurrentTargetIndex = INDEX_NONE;
+	EStrategyTargetingMode TargetingMode = EStrategyTargetingMode::Fire;
 	bool bIsInFireMode = false;
 	bool bIsResolvingAttack = false;
 	FTimerHandle ExitFireModeTimerHandle;

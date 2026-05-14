@@ -135,7 +135,12 @@ void AStrategyGameMode::SpawnUnits()
 		}
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::Human);
-		Unit->EquipWeapon(DefaultWeaponData);
+		if (DefaultWeaponData
+			&& !Unit->GetEquippedFireWeapon().WeaponData
+			&& !Unit->GetEquippedMeleeWeapon().WeaponData)
+		{
+			Unit->EquipWeapon(DefaultWeaponData);
+		}
 		PlayerSide->AddUnit(Unit);
 	}
 

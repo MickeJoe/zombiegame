@@ -25,6 +25,9 @@ protected:
 	void StartNextEnemyUnitTurn();
 	
 	int32 CurrentUnitIndex;
+
+	UPROPERTY()
+	TArray<TObjectPtr<AStrategyUnit>> ActiveTurnUnits;
 	
 	UPROPERTY()
 	TObjectPtr<AGridManager> CachedGridManager = nullptr;

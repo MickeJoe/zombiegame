@@ -11,6 +11,8 @@ class UTextBlock;
 class UTexture2D;
 class UVerticalBox;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerUnitRosterUnitClicked, AStrategyUnit*, Unit);
+
 USTRUCT(BlueprintType)
 struct FPlayerUnitRosterEntry
 {
@@ -54,7 +56,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void SetEntry(const FPlayerUnitRosterEntry& InEntry);
 
+	UPROPERTY(BlueprintAssignable)
+	FOnPlayerUnitRosterUnitClicked OnUnitClicked;
+
 protected:
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> Border_Background;
 
@@ -68,7 +75,13 @@ protected:
 	TObjectPtr<UTextBlock> Text_Health;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_HealthValue;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_ActionPoints;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_ActionPointsValue;
 
 private:
 	FPlayerUnitRosterEntry Entry;
@@ -90,7 +103,13 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void SetUnits(const TArray<AStrategyUnit*>& Units, const TArray<AStrategyUnit*>& SelectedUnits);
 
+	UPROPERTY(BlueprintAssignable)
+	FOnPlayerUnitRosterUnitClicked OnUnitClicked;
+
 protected:
+	UFUNCTION()
+	void HandleCardUnitClicked(AStrategyUnit* Unit);
+
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPlayerUnitRosterCardWidget> CardWidgetClass;
 

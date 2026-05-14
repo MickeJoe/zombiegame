@@ -120,9 +120,17 @@ void AStrategyUnit::BeginPlay()
 		}
 	}
 
-	if (UnitData && UnitData->DefaultWeapon && !EquippedWeapon.WeaponData)
+	if (UnitData && UnitData->DefaultWeapon && !GetEquippedFireWeapon().WeaponData && !GetEquippedMeleeWeapon().WeaponData)
 	{
 		EquipWeapon(UnitData->DefaultWeapon);
+	}
+
+	if (UnitData)
+	{
+		for (UStrategyWeaponData* DefaultWeapon : UnitData->DefaultWeapons)
+		{
+			EquipWeapon(DefaultWeapon);
+		}
 	}
 
 	CurrentHealth = GetMaxHealth();
@@ -302,6 +310,16 @@ FAttackStats AStrategyUnit::GetBiteAttackStats() const
 	return UnitData ? UnitData->BiteAttack : FAttackStats();
 }
 
+const FAttackStats* AStrategyUnit::GetMeleeAttackStats() const
+{
+	if (const FAttackStats* WeaponAttackStats = GetEquippedMeleeWeapon().GetAttackStats())
+	{
+		return WeaponAttackStats;
+	}
+
+	return UnitData ? &UnitData->HandAttack : nullptr;
+}
+
 void AStrategyUnit::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -421,6 +439,47 @@ void AStrategyUnit::ScheduleDeathRemoval(float DelaySeconds)
 	SetLifeSpan(FMath::Max(DelaySeconds, 0.1f));
 }
 
+bool AStrategyUnit::CanMeleeAttack(AAIStrategySide* EnemySide) const
+{
+	if (!GridManager || !EnemySide || GetRemainingActionPoints() <= 0)
+	{
+		return false;
+	}
+
+	const FAttackStats* AttackStats = GetMeleeAttackStats();
+	if (!AttackStats)
+	{
+		return false;
+	}
+
+	if (GetRemainingActionPoints() < AttackStats->ActionPointCost)
+	{
+		return false;
+	}
+
+	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
+
+	for (AStrategyUnit* Enemy : EnemySide->Units)
+	{
+		if (!IsValid(Enemy) || Enemy->GetCurrentHealth() <= 0)
+		{
+			continue;
+		}
+
+		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
+		const int32 Distance =
+			FMath::Abs(MyCell.X - EnemyCell.X) +
+			FMath::Abs(MyCell.Y - EnemyCell.Y);
+
+		if (Distance <= AttackStats->Range)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 {
 	if (!GridManager || !EnemySide)
@@ -434,13 +493,15 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
+	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
+
 	// 2. Ammo check
-	if (!EquippedWeapon.WeaponData)
+	if (!FireWeapon.WeaponData)
 	{
 		return false;
 	}
 
-	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	const FAttackStats* AttackStats = FireWeapon.GetAttackStats();
 	if (!AttackStats)
 	{
 		return false;
@@ -451,7 +512,10 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (EquippedWeapon.UsesAmmo() && EquippedWeapon.CurrentAmmo < AttackStats->AmmoCost)
+	const int32 AmmoCost = FireWeapon.UsesAmmo()
+		? FMath::Max(AttackStats->AmmoCost, 1)
+		: 0;
+	if (FireWeapon.UsesAmmo() && FireWeapon.CurrentAmmo < AmmoCost)
 	{
 		return false;
 	}
@@ -481,9 +545,35 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 	return false;
 }
 
+void AStrategyUnit::SpendMeleeAttackResources()
+{
+	const FAttackStats* AttackStats = GetMeleeAttackStats();
+	if (!AttackStats)
+	{
+		return;
+	}
+
+	UseAtionPoints(AttackStats->ActionPointCost);
+}
+
 void AStrategyUnit::SpendWeaponAttackResources()
 {
-	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	FStrategyWeaponInstance* FireWeapon = nullptr;
+	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		FireWeapon = &TwoHandedWeapon;
+	}
+	else if (OneHandedFireWeapon.WeaponData)
+	{
+		FireWeapon = &OneHandedFireWeapon;
+	}
+
+	if (!FireWeapon)
+	{
+		return;
+	}
+
+	const FAttackStats* AttackStats = FireWeapon->GetAttackStats();
 	if (!AttackStats)
 	{
 		return;
@@ -491,9 +581,74 @@ void AStrategyUnit::SpendWeaponAttackResources()
 
 	UseAtionPoints(AttackStats->ActionPointCost);
 
-	if (EquippedWeapon.UsesAmmo())
+	if (FireWeapon->UsesAmmo())
 	{
-		EquippedWeapon.CurrentAmmo = FMath::Max(EquippedWeapon.CurrentAmmo - AttackStats->AmmoCost, 0);
+		const int32 AmmoCost = FMath::Max(AttackStats->AmmoCost, 1);
+		FireWeapon->CurrentAmmo = FMath::Max(FireWeapon->CurrentAmmo - AmmoCost, 0);
+	}
+}
+
+bool AStrategyUnit::CanReload() const
+{
+	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
+	return FireWeapon.UsesAmmo()
+		&& FireWeapon.CurrentAmmo < FireWeapon.GetMaxAmmo()
+		&& GetRemainingActionPoints() >= 1;
+}
+
+void AStrategyUnit::ReloadWeapon()
+{
+	if (!CanReload())
+	{
+		return;
+	}
+
+	UseAtionPoints(1);
+
+	FStrategyWeaponInstance* FireWeapon = nullptr;
+	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		FireWeapon = &TwoHandedWeapon;
+	}
+	else if (OneHandedFireWeapon.WeaponData)
+	{
+		FireWeapon = &OneHandedFireWeapon;
+	}
+
+	if (FireWeapon)
+	{
+		FireWeapon->CurrentAmmo = FireWeapon->GetMaxAmmo();
+	}
+}
+
+void AStrategyUnit::StartMeleeAttackMode()
+{
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	AStrategyPlayerController* StrategyPC = Cast<AStrategyPlayerController>(PC);
+	if (!StrategyPC)
+	{
+		return;
+	}
+
+	UStrategyTargetingComponent* Targeting = StrategyPC->GetTargetingComponent();
+	if (!Targeting)
+	{
+		return;
+	}
+
+	if (Targeting->EnterMeleeMode(this, GetMeleeEnemiesInRange()))
+	{
+		StrategyPC->RemoveTacticalHUD();
+		StrategyPC->ShowTargetingHUD();
+	}
+	else
+	{
+		StrategyPC->ShowTacticalHUD();
 	}
 }
 
@@ -517,9 +672,15 @@ void AStrategyUnit::StartWeaponAttackMode()
 		return;
 	}
 	
-	StrategyPC->RemoveTacticalHUD();
-	Targeting->EnterFireMode(this, GetEnemiesInRange());
-	StrategyPC->ShowTargetingHUD();
+	if (Targeting->EnterFireMode(this, GetEnemiesInRange()))
+	{
+		StrategyPC->RemoveTacticalHUD();
+		StrategyPC->ShowTargetingHUD();
+	}
+	else
+	{
+		StrategyPC->ShowTacticalHUD();
+	}
 }
 
 TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
@@ -538,12 +699,13 @@ TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
 		return Result;
 	}
 	
-	if (!GridManager || !EquippedWeapon.WeaponData)
+	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
+	if (!GridManager || !FireWeapon.WeaponData)
 	{
 		return Result;
 	}
 
-	const FAttackStats* AttackStats = EquippedWeapon.GetAttackStats();
+	const FAttackStats* AttackStats = FireWeapon.GetAttackStats();
 	if (!AttackStats)
 	{
 		return Result;
@@ -561,6 +723,52 @@ TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
 
 		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
 
+		const int32 Distance =
+			FMath::Abs(MyCell.X - EnemyCell.X) +
+			FMath::Abs(MyCell.Y - EnemyCell.Y);
+
+		if (Distance <= Range)
+		{
+			Result.Add(Enemy);
+		}
+	}
+
+	return Result;
+}
+
+TArray<AStrategyUnit*> AStrategyUnit::GetMeleeEnemiesInRange() const
+{
+	TArray<AStrategyUnit*> Result;
+
+	AStrategyGameMode* GameMode = GetStrategyGameMode();
+	if (!ensureMsgf(GameMode, TEXT("GameMode is null in AStrategyUnit::GetMeleeEnemiesInRange")))
+	{
+		return Result;
+	}
+
+	AAIStrategySide* EnemySide = GameMode->GetEnemySide();
+	if (!ensureMsgf(EnemySide, TEXT("EnemySide is null in AStrategyUnit::GetMeleeEnemiesInRange")))
+	{
+		return Result;
+	}
+
+	const FAttackStats* AttackStats = GetMeleeAttackStats();
+	if (!GridManager || !AttackStats)
+	{
+		return Result;
+	}
+
+	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
+	const int32 Range = AttackStats->Range;
+
+	for (AStrategyUnit* Enemy : EnemySide->Units)
+	{
+		if (!Enemy || Enemy->GetCurrentHealth() <= 0)
+		{
+			continue;
+		}
+
+		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
 		const int32 Distance =
 			FMath::Abs(MyCell.X - EnemyCell.X) +
 			FMath::Abs(MyCell.Y - EnemyCell.Y);
@@ -598,7 +806,59 @@ void AStrategyUnit::UpdateStatusBar()
 
 void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
 {
-	EquippedWeapon.Init(WeaponData);
+	if (!WeaponData)
+	{
+		return;
+	}
+
+	if (WeaponData->Handedness == EStrategyWeaponHandedness::TwoHanded)
+	{
+		OneHandedFireWeapon = FStrategyWeaponInstance();
+		OneHandedMeleeWeapon = FStrategyWeaponInstance();
+		TwoHandedWeapon.Init(WeaponData);
+		return;
+	}
+
+	TwoHandedWeapon = FStrategyWeaponInstance();
+
+	if (WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		OneHandedFireWeapon.Init(WeaponData);
+	}
+	else
+	{
+		OneHandedMeleeWeapon.Init(WeaponData);
+	}
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetEquippedFireWeapon() const
+{
+	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		return TwoHandedWeapon;
+	}
+
+	if (OneHandedFireWeapon.WeaponData)
+	{
+		return OneHandedFireWeapon;
+	}
+
+	return EmptyWeaponInstance;
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetEquippedMeleeWeapon() const
+{
+	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Melee)
+	{
+		return TwoHandedWeapon;
+	}
+
+	if (OneHandedMeleeWeapon.WeaponData)
+	{
+		return OneHandedMeleeWeapon;
+	}
+
+	return EmptyWeaponInstance;
 }
 
 AStrategyGameMode* AStrategyUnit::GetStrategyGameMode() const

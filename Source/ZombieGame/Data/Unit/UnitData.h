@@ -67,6 +67,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Equipment")
 	TObjectPtr<UStrategyWeaponData> DefaultWeapon;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Equipment")
+	TArray<TObjectPtr<UStrategyWeaponData>> DefaultWeapons;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
 	TObjectPtr<UAnimMontage> HitReactMontage;
