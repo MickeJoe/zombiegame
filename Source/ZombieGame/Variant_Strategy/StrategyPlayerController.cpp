@@ -1083,22 +1083,26 @@ void AStrategyPlayerController::CheckTouchTap(bool& bTapped, bool& bDoubleTapped
 
 void AStrategyPlayerController::UpdateMovementHighlights()
 {
-	if (!GridManager || !HighlightActor || !TargetUnit)
+	if (!GridManager || !HighlightActor)
 	{
 		return;
 	}
 
-	if (TargetUnit->GetRemainingActionPoints() < 1)
+	AStrategyUnit* HighlightUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(HighlightUnit) || !IsSelectableUnit(HighlightUnit) || HighlightUnit->GetRemainingActionPoints() < 1)
 	{
+		ReachableCells.Empty();
+		HighlightActor->ClearReachableHighlights();
 		return;
 	}
 
+	TargetUnit = HighlightUnit;
 	ReachableCells.Empty();
 	
-	const FIntPoint UnitCell = GridManager->WorldToGrid(TargetUnit->GetActorLocation());
+	const FIntPoint UnitCell = GridManager->WorldToGrid(HighlightUnit->GetActorLocation());
 
 	// Exempel: enkel diamond range, byt senare mot riktig pathfinding-cost
-	const int32 MaxMove = TargetUnit->GetMaxMovement();
+	const int32 MaxMove = HighlightUnit->GetMaxMovement();
 
 	for (int32 Y = -MaxMove; Y <= MaxMove; ++Y)
 	{
@@ -1112,7 +1116,7 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 
 			const FIntPoint TestCell(UnitCell.X + X, UnitCell.Y + Y);
 
-			if (GridManager->IsCellWithinMoveRange(TargetUnit, TestCell, MaxMove))
+			if (GridManager->IsCellWithinMoveRange(HighlightUnit, TestCell, MaxMove))
 			{
 				ReachableCells.Add(TestCell);
 			}
@@ -1636,8 +1640,10 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 		break;
 
 	case EPlayerUnitActionType::SkipTurn:
-//		SelectedUnit->SpendAllActionPoints();
+		SelectedUnit->UseAtionPoints(SelectedUnit->GetRemainingActionPoints());
 		RefreshActionBar();
+		RefreshPlayerUnitRoster();
+		RefreshWeaponInfoPanel();
 		break;
 
 	default:
@@ -1750,6 +1756,14 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("No AP")
 	});
 
+	Actions.Add({
+		EPlayerUnitActionType::SkipTurn,
+		FText::FromString("Skip"),
+		nullptr,
+		SelectedUnit->GetRemainingActionPoints() > 0,
+		FText::FromString("No AP")
+	});
+
 /*
 	Actions.Add({
 		EPlayerUnitActionType::HunkerDown,
@@ -1759,13 +1773,6 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("No AP")
 	});
 
-	Actions.Add({
-		EPlayerUnitActionType::SkipTurn,
-		FText::FromString("Skip"),
-		nullptr,
-		SelectedUnit->GetRemainingActionPoints() > 0,
-		FText::FromString("")
-	});
 */
 	UnitActionBarWidget->SetActions(Actions);
 	

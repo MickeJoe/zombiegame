@@ -43,6 +43,7 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 	bool bCanReload = false;
 	bool bCanHunkerDown = false;
 	bool bCanOverwatch = false;
+	bool bCanSkip = false;
 
 	for (const FUnitActionButtonData& Action : Actions)
 	{
@@ -66,6 +67,10 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 
 		case EPlayerUnitActionType::Overwatch:
 			bCanOverwatch = Action.bEnabled;
+			break;
+
+		case EPlayerUnitActionType::SkipTurn:
+			bCanSkip = Action.bEnabled;
 			break;
 
 		default:
@@ -104,6 +109,11 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 	if (Button_Overwatch)
 	{
 		Button_Overwatch->SetIsEnabled(bCanOverwatch);
+	}
+
+	if (Button_Skip)
+	{
+		Button_Skip->SetIsEnabled(bCanSkip);
 	}
 }
 
