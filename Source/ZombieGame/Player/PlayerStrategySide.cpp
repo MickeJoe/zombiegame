@@ -17,7 +17,12 @@ void APlayerStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* Sig
 	for (TObjectPtr<AStrategyUnit> UnitPtr : Units)
 	{
 		UnitPtr->ResetActionPoints();
-	}	
+	}
+
+	if (AStrategyPlayerController* PC = GetWorld()->GetFirstPlayerController<AStrategyPlayerController>())
+	{
+		PC->RefreshLockedOverwatchHighlights();
+	}
 }
 
 bool APlayerStrategySide::IsHuman() const

@@ -16,8 +16,10 @@
 #include "Player/AIStrategySide.h"
 #include "Systems/SightManager.h"
 #include "Systems/GridManager.h"
+#include "Systems/AttackHandling/StrategyWeaponInstance.h"
 
 #include "ZombieGame/Variant_Strategy/StrategyUnit.h"
+#include "ZombieGame.h"
 
 PRAGMA_DISABLE_OPTIMIZATION
 
@@ -142,6 +144,7 @@ void AStrategyGameMode::SpawnUnits()
 			Unit->EquipWeapon(DefaultWeaponData);
 		}
 		PlayerSide->AddUnit(Unit);
+		BindUnitOverwatchMovement(Unit);
 	}
 
 	for (AStrategySpawnPoint* Spawn : EnemySpawns)
@@ -159,6 +162,7 @@ void AStrategyGameMode::SpawnUnits()
 
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::AI);
 		EnemySide->AddUnit(Unit);
+		BindUnitOverwatchMovement(Unit);
 	}
 }
 /*
@@ -184,6 +188,74 @@ void AStrategyGameMode::RegisterUnitToSide(AStrategyUnit* Unit, AStrategySide* S
 
 	Unit->OwningSide = Side;
 	Side->AddUnit(Unit);
+	BindUnitOverwatchMovement(Unit);
+}
+
+void AStrategyGameMode::BindUnitOverwatchMovement(AStrategyUnit* Unit)
+{
+	if (!Unit)
+	{
+		return;
+	}
+
+	Unit->OnGridCellChanged.AddUniqueDynamic(this, &AStrategyGameMode::HandleUnitGridCellChanged);
+}
+
+AStrategySide* AStrategyGameMode::GetOpposingSideForUnit(const AStrategyUnit* Unit) const
+{
+	if (!Unit)
+	{
+		return nullptr;
+	}
+
+	return Unit->GetStrategyUnitTeam() == EStrategyUnitTeam::Human
+		? Cast<AStrategySide>(EnemySide)
+		: Cast<AStrategySide>(PlayerSide);
+}
+
+void AStrategyGameMode::HandleUnitGridCellChanged(AStrategyUnit* Unit)
+{
+	if (!IsValid(Unit) || Unit->GetCurrentHealth() <= 0 || !GridManager)
+	{
+		return;
+	}
+
+	AStrategySide* OpposingSide = GetOpposingSideForUnit(Unit);
+	if (!OpposingSide)
+	{
+		return;
+	}
+
+	const FIntPoint UnitCell = GridManager->WorldToGrid(Unit->GetActorLocation());
+	for (AStrategyUnit* OverwatchUnit : OpposingSide->GetAliveUnits())
+	{
+		if (!IsValid(OverwatchUnit)
+			|| OverwatchUnit->GetCurrentHealth() <= 0
+			|| !OverwatchUnit->IsOverwatchActive()
+			|| !OverwatchUnit->GetOverwatchCells().Contains(UnitCell))
+		{
+			continue;
+		}
+
+		UE_LOG(LogZombieGame, Log, TEXT("Overwatch: %s fires at %s entering cell %s"),
+			*GetNameSafe(OverwatchUnit),
+			*GetNameSafe(Unit),
+			*UnitCell.ToString());
+
+		if (OverwatchUnit->TryFireOverwatchAt(Unit))
+		{
+			if (AStrategyPlayerController* PC = Cast<AStrategyPlayerController>(GetWorld()->GetFirstPlayerController()))
+			{
+				PC->RefreshLockedOverwatchHighlights();
+				PC->RefreshWeaponInfoPanel();
+			}
+		}
+
+		if (!IsValid(Unit) || Unit->GetCurrentHealth() <= 0)
+		{
+			break;
+		}
+	}
 }
 
 AStrategySide* AStrategyGameMode::GetActiveSide() const

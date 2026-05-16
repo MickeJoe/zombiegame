@@ -92,6 +92,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Strategy")
 	bool IsBattleOver() const;
 
+	UFUNCTION()
+	void HandleUnitGridCellChanged(AStrategyUnit* Unit);
+
 	void SetupSpawnPoints();
 	void SpawnUnits();
 //	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Units")
@@ -99,6 +102,9 @@ public:
 private:
 //	UPROPERTY(Transient)
 //	TArray<AStrategyUnit*> PlayerUnitArray;
+
+	AStrategySide* GetOpposingSideForUnit(const AStrategyUnit* Unit) const;
+	void BindUnitOverwatchMovement(AStrategyUnit* Unit);
 
 	UPROPERTY(EditDefaultsOnly, Category = "Strategy")
 	TSubclassOf<APlayerStrategySide> PlayerSideClass;

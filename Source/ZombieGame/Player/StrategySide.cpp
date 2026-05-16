@@ -21,6 +21,7 @@ void AStrategySide::AddUnit(AStrategyUnit* Unit)
 	if (!Units.Contains(Unit))
 	{
 		Units.Add(Unit);
+		Unit->OwningSide = this;
 	}
 }
 

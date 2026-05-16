@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Systems/GridHighlightActor.h"
 #include "UI/TurnBannerWidget.h"
 #include "StrategyPlayerController.generated.h"
 
@@ -216,6 +217,8 @@ public:
 	/** Initialize input bindings */
 	virtual void SetupInputComponent() override;
 
+	virtual void PlayerTick(float DeltaTime) override;
+
 	/** Pawn initialization */
 	virtual void OnPossess(APawn* InPawn);
 
@@ -238,6 +241,7 @@ public:
 	void HideTargetingHUD();
 	void RefreshWeaponInfoPanel();
 	void SuppressSelectionInputBriefly();
+	void RefreshLockedOverwatchHighlights();
 
 protected:
 
@@ -375,6 +379,13 @@ protected:
 	void UpdateMovementHighlights();
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
 	void RefreshPlayerUnitRoster();
+	void BeginOverwatchPlacement(AStrategyUnit* Unit);
+	void UpdateOverwatchPlacementPreview();
+	void ConfirmOverwatchPlacement();
+	void CancelOverwatchPlacement();
+	TArray<FIntPoint> BuildOverwatchConeCells(const AStrategyUnit* Unit, const FVector& AimLocation);
+	bool HasOverwatchLineOfSight(const AStrategyUnit* Unit, const FIntPoint& Cell) const;
+	FOverwatchBoundaryLine MakeOverwatchBoundaryLine(const AStrategyUnit* Unit, const FVector& Direction, const TArray<FIntPoint>& Cells) const;
 	
 	UFUNCTION()
 	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);
@@ -393,6 +404,26 @@ protected:
 
 	UPROPERTY(Transient)
 	TArray<FIntPoint> ReachableCells;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch")
+	float OverwatchConeAngleDegrees = 90.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch")
+	float OverwatchLineOfSightHeightOffset = 70.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float OverwatchMinGroundNormalZ = 0.65f;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AStrategyUnit> OverwatchPlacementUnit = nullptr;
+
+	UPROPERTY(Transient)
+	FVector OverwatchPlacementDirection = FVector::ForwardVector;
+
+	UPROPERTY(Transient)
+	TArray<FIntPoint> OverwatchPreviewCells;
+
+	bool bIsPlacingOverwatch = false;
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;

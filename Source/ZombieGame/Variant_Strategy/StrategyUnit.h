@@ -139,6 +139,16 @@ public:
 	void StartWeaponAttackMode();
 	bool CanReload() const;
 	void ReloadWeapon();
+	bool CanOverwatch() const;
+	int32 GetOverwatchRange() const;
+	void EnterOverwatch(const FVector& Direction, int32 Range, float AngleDegrees, const TArray<FIntPoint>& Cells);
+	void ClearOverwatch();
+	bool TryFireOverwatchAt(AStrategyUnit* Target);
+	bool IsOverwatchActive() const { return bOverwatchActive; }
+	const FVector& GetOverwatchDirection() const { return OverwatchDirection; }
+	int32 GetActiveOverwatchRange() const { return OverwatchRange; }
+	float GetOverwatchAngleDegrees() const { return OverwatchAngleDegrees; }
+	const TArray<FIntPoint>& GetOverwatchCells() const { return OverwatchCells; }
 
 protected:
 
@@ -202,6 +212,21 @@ protected:
 	int32 UsedActionPoints = 0;
 	int32 CurrentHealth = 0;
 	int32 CurrentArmor = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
+	bool bOverwatchActive = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
+	FVector OverwatchDirection = FVector::ForwardVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
+	int32 OverwatchRange = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
+	float OverwatchAngleDegrees = 135.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
+	TArray<FIntPoint> OverwatchCells;
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;

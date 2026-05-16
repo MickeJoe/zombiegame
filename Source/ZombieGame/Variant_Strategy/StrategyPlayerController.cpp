@@ -20,6 +20,7 @@
 #include "TimerManager.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "Player/AIStrategySide.h"
 #include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
 #include "Data/Weapon/StrategyWeaponData.h"
@@ -31,6 +32,20 @@
 #include "UI/UnitActionBarWidget.h"
 #include "UI/WeaponInfoSlateWidget.h"
 #include "UI/TargetingUI//StrategyTargetingComponent.h"
+#include "ZombieGame.h"
+
+namespace
+{
+	static TAutoConsoleVariable<int32> CVarOverwatchDebug(
+		TEXT("zg.OverwatchDebug"),
+		1,
+		TEXT("Logs overwatch placement and decal projection diagnostics."));
+
+	bool IsOverwatchDebugEnabled()
+	{
+		return CVarOverwatchDebug.GetValueOnGameThread() != 0;
+	}
+}
 
 PRAGMA_DISABLE_OPTIMIZATION
 
@@ -227,6 +242,16 @@ void AStrategyPlayerController::SetupInputComponent()
 	}
 }
 
+void AStrategyPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	if (bIsPlacingOverwatch)
+	{
+		UpdateOverwatchPlacementPreview();
+	}
+}
+
 void AStrategyPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
@@ -365,6 +390,12 @@ void AStrategyPlayerController::SelectHoldCompleted(const FInputActionValue& Val
 
 void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 {
+	if (bIsPlacingOverwatch)
+	{
+		ConfirmOverwatchPlacement();
+		return;
+	}
+
 	if (GetWorld() && GetWorld()->GetRealTimeSeconds() < IgnoreSelectionInputUntilTime)
 	{
 		return;
@@ -405,6 +436,10 @@ void AStrategyPlayerController::InteractHoldTriggered(const FInputActionValue& V
 
 void AStrategyPlayerController::InteractClickStarted(const FInputActionValue& Value)
 {
+	if (bIsPlacingOverwatch)
+	{
+		return;
+	}
 
 	// reset the interaction flag
 	ResetInteraction();
@@ -412,6 +447,11 @@ void AStrategyPlayerController::InteractClickStarted(const FInputActionValue& Va
 
 void AStrategyPlayerController::InteractClickCompleted(const FInputActionValue& Value)
 {
+	if (bIsPlacingOverwatch)
+	{
+		CancelOverwatchPlacement();
+		return;
+	}
 
 	// do we have any units in the control list and a valid interaction location under the cursor?
 	if (ControlledUnits.Num() > 0 && GetLocationUnderCursor(CachedInteraction))
@@ -1082,6 +1122,472 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	HighlightActor->ShowReachableCells(GridManager, ReachableCells);
 }
 
+void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
+{
+	if (!IsValid(Unit) || !Unit->CanOverwatch())
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement blocked Unit=%s IsValid=%d CanOverwatch=%d"),
+				*GetNameSafe(Unit),
+				IsValid(Unit),
+				IsValid(Unit) ? Unit->CanOverwatch() : false);
+		}
+		return;
+	}
+
+	if (IsOverwatchDebugEnabled())
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement Unit=%s AP=%d Range=%d HighlightActor=%s Grid=%s ConeAngle=%.1f"),
+			*GetNameSafe(Unit),
+			Unit->GetRemainingActionPoints(),
+			Unit->GetOverwatchRange(),
+			*GetNameSafe(HighlightActor),
+			*GetNameSafe(GridManager),
+			OverwatchConeAngleDegrees);
+	}
+
+	OverwatchPlacementUnit = Unit;
+	bIsPlacingOverwatch = true;
+	OverwatchPreviewCells.Empty();
+
+	if (HighlightActor)
+	{
+		HighlightActor->ClearReachableHighlights();
+	}
+
+	UpdateOverwatchPlacementPreview();
+}
+
+void AStrategyPlayerController::UpdateOverwatchPlacementPreview()
+{
+	if (!bIsPlacingOverwatch || !IsValid(OverwatchPlacementUnit) || !GridManager || !HighlightActor)
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview skipped bPlacing=%d Unit=%s Grid=%s HighlightActor=%s"),
+				bIsPlacingOverwatch,
+				*GetNameSafe(OverwatchPlacementUnit),
+				*GetNameSafe(GridManager),
+				*GetNameSafe(HighlightActor));
+		}
+		return;
+	}
+
+	FVector AimLocation;
+	if (!GetLocationUnderCursor(AimLocation))
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview cursor trace failed TraceChannel=%d"),
+				static_cast<int32>(SelectionTraceChannel.GetValue()));
+		}
+		return;
+	}
+
+	OverwatchPreviewCells = BuildOverwatchConeCells(OverwatchPlacementUnit, AimLocation);
+	const FOverwatchBoundaryLine BoundaryLine = MakeOverwatchBoundaryLine(
+		OverwatchPlacementUnit,
+		OverwatchPlacementDirection,
+		OverwatchPreviewCells);
+
+	if (IsOverwatchDebugEnabled())
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview Aim=%s Direction=%s Cells=%d Range=%d"),
+			*AimLocation.ToCompactString(),
+			*OverwatchPlacementDirection.ToCompactString(),
+			OverwatchPreviewCells.Num(),
+			OverwatchPlacementUnit->GetOverwatchRange());
+	}
+	HighlightActor->ShowOverwatchPreviewCells(GridManager, OverwatchPreviewCells);
+	HighlightActor->ShowOverwatchPreviewBoundaryLine(BoundaryLine);
+}
+
+void AStrategyPlayerController::ConfirmOverwatchPlacement()
+{
+	if (!bIsPlacingOverwatch || !IsValid(OverwatchPlacementUnit))
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm failed, no valid placement Unit=%s bPlacing=%d"),
+				*GetNameSafe(OverwatchPlacementUnit),
+				bIsPlacingOverwatch);
+		}
+		CancelOverwatchPlacement();
+		return;
+	}
+
+	FVector AimLocation;
+	if (!GetLocationUnderCursor(AimLocation))
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm cursor trace failed"));
+		}
+		CancelOverwatchPlacement();
+		return;
+	}
+
+	OverwatchPreviewCells = BuildOverwatchConeCells(OverwatchPlacementUnit, AimLocation);
+	if (OverwatchPreviewCells.Num() == 0)
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm produced zero cells Aim=%s Unit=%s"),
+				*AimLocation.ToCompactString(),
+				*GetNameSafe(OverwatchPlacementUnit));
+		}
+		CancelOverwatchPlacement();
+		return;
+	}
+
+	if (IsOverwatchDebugEnabled())
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm Unit=%s APBefore=%d Aim=%s Direction=%s Cells=%d Range=%d"),
+			*GetNameSafe(OverwatchPlacementUnit),
+			OverwatchPlacementUnit->GetRemainingActionPoints(),
+			*AimLocation.ToCompactString(),
+			*OverwatchPlacementDirection.ToCompactString(),
+			OverwatchPreviewCells.Num(),
+			OverwatchPlacementUnit->GetOverwatchRange());
+	}
+
+	OverwatchPlacementUnit->EnterOverwatch(
+		OverwatchPlacementDirection,
+		OverwatchPlacementUnit->GetOverwatchRange(),
+		OverwatchConeAngleDegrees,
+		OverwatchPreviewCells);
+
+	if (HighlightActor)
+	{
+		HighlightActor->ClearOverwatchPreviewHighlights();
+		RefreshLockedOverwatchHighlights();
+	}
+
+	OverwatchPlacementUnit = nullptr;
+	bIsPlacingOverwatch = false;
+	OverwatchPreviewCells.Empty();
+
+	RefreshActionBar();
+	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
+}
+
+void AStrategyPlayerController::CancelOverwatchPlacement()
+{
+	if (IsOverwatchDebugEnabled())
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Cancel placement Unit=%s Cells=%d"),
+			*GetNameSafe(OverwatchPlacementUnit),
+			OverwatchPreviewCells.Num());
+	}
+
+	if (HighlightActor)
+	{
+		HighlightActor->ClearOverwatchPreviewHighlights();
+	}
+
+	OverwatchPlacementUnit = nullptr;
+	bIsPlacingOverwatch = false;
+	OverwatchPreviewCells.Empty();
+}
+
+void AStrategyPlayerController::RefreshLockedOverwatchHighlights()
+{
+	if (!HighlightActor || !GridManager)
+	{
+		return;
+	}
+
+	TArray<FIntPoint> LockedCells;
+	TArray<FOverwatchBoundaryLine> BoundaryLines;
+	if (AStrategyGameMode* GameMode = GetStrategyGameMode())
+	{
+		if (GameMode->GetPlayerSide())
+		{
+			for (AStrategyUnit* Unit : GameMode->GetPlayerSide()->GetAliveUnits())
+			{
+				if (IsValid(Unit) && Unit->IsOverwatchActive())
+				{
+					LockedCells.Append(Unit->GetOverwatchCells());
+					BoundaryLines.Add(MakeOverwatchBoundaryLine(
+						Unit,
+						Unit->GetOverwatchDirection(),
+						Unit->GetOverwatchCells()));
+				}
+			}
+		}
+
+		if (GameMode->GetEnemySide())
+		{
+			for (AStrategyUnit* Unit : GameMode->GetEnemySide()->GetAliveUnits())
+			{
+				if (IsValid(Unit) && Unit->IsOverwatchActive())
+				{
+					LockedCells.Append(Unit->GetOverwatchCells());
+					BoundaryLines.Add(MakeOverwatchBoundaryLine(
+						Unit,
+						Unit->GetOverwatchDirection(),
+						Unit->GetOverwatchCells()));
+				}
+			}
+		}
+	}
+
+	HighlightActor->ShowOverwatchCells(GridManager, LockedCells);
+	HighlightActor->ShowOverwatchBoundaryLines(BoundaryLines);
+}
+
+TArray<FIntPoint> AStrategyPlayerController::BuildOverwatchConeCells(const AStrategyUnit* Unit, const FVector& AimLocation)
+{
+	TArray<FIntPoint> Cells;
+	if (!Unit || !GridManager)
+	{
+		if (IsOverwatchDebugEnabled())
+		{
+			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BuildCone aborted Unit=%s Grid=%s"),
+				*GetNameSafe(Unit),
+				*GetNameSafe(GridManager));
+		}
+		return Cells;
+	}
+
+	const FVector UnitLocation = Unit->GetActorLocation();
+	FVector Direction(AimLocation.X - UnitLocation.X, AimLocation.Y - UnitLocation.Y, 0.0f);
+	if (!Direction.Normalize())
+	{
+		Direction = Unit->GetActorForwardVector();
+		Direction.Z = 0.0f;
+		Direction.Normalize();
+	}
+
+	OverwatchPlacementDirection = Direction;
+
+	const FIntPoint UnitCell = GridManager->WorldToGrid(UnitLocation);
+	const int32 Range = FMath::Max(Unit->GetOverwatchRange(), 1);
+	const float HalfAngleRadians = FMath::DegreesToRadians(OverwatchConeAngleDegrees * 0.5f);
+	const float MinDot = FMath::Cos(HalfAngleRadians);
+	int32 InvalidCells = 0;
+	int32 OutOfRangeCells = 0;
+	int32 OutsideAngleCells = 0;
+	int32 BlockedCells = 0;
+
+	for (int32 Y = -Range; Y <= Range; ++Y)
+	{
+		for (int32 X = -Range; X <= Range; ++X)
+		{
+			if (X == 0 && Y == 0)
+			{
+				continue;
+			}
+
+			const FIntPoint TestCell(UnitCell.X + X, UnitCell.Y + Y);
+			if (!GridManager->IsValidCell(TestCell))
+			{
+				++InvalidCells;
+				continue;
+			}
+
+			const FVector CellLocation = GridManager->GridToWorld(TestCell);
+			FVector ToCell(CellLocation.X - UnitLocation.X, CellLocation.Y - UnitLocation.Y, 0.0f);
+			const float DistanceInCells = ToCell.Size() / GridManager->CellSize;
+			if (DistanceInCells > Range || !ToCell.Normalize())
+			{
+				++OutOfRangeCells;
+				continue;
+			}
+
+			if (FVector::DotProduct(Direction, ToCell) >= MinDot)
+			{
+				if (HasOverwatchLineOfSight(Unit, TestCell))
+				{
+					Cells.Add(TestCell);
+				}
+				else
+				{
+					++BlockedCells;
+				}
+			}
+			else
+			{
+				++OutsideAngleCells;
+			}
+		}
+	}
+
+	if (IsOverwatchDebugEnabled())
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BuildCone Unit=%s UnitCell=%s Aim=%s Direction=%s Range=%d Angle=%.1f Cells=%d Invalid=%d OutOfRange=%d OutsideAngle=%d Blocked=%d"),
+			*GetNameSafe(Unit),
+			*UnitCell.ToString(),
+			*AimLocation.ToCompactString(),
+			*Direction.ToCompactString(),
+			Range,
+			OverwatchConeAngleDegrees,
+			Cells.Num(),
+			InvalidCells,
+			OutOfRangeCells,
+			OutsideAngleCells,
+			BlockedCells);
+	}
+
+	return Cells;
+}
+
+bool AStrategyPlayerController::HasOverwatchLineOfSight(const AStrategyUnit* Unit, const FIntPoint& Cell) const
+{
+	if (!Unit || !GridManager || !GetWorld())
+	{
+		return false;
+	}
+
+	FVector TargetLocation;
+	FVector TargetNormal;
+	if (!GridManager->ProjectCellToGround(Cell, TargetLocation, TargetNormal))
+	{
+		return false;
+	}
+
+	if (TargetNormal.Z < OverwatchMinGroundNormalZ)
+	{
+		return false;
+	}
+
+	const FVector Start = Unit->GetActorLocation() + FVector(0.0f, 0.0f, OverwatchLineOfSightHeightOffset);
+	const FVector End = TargetLocation + FVector(0.0f, 0.0f, OverwatchLineOfSightHeightOffset);
+
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(OverwatchLineOfSight), false);
+	QueryParams.AddIgnoredActor(Unit);
+
+	return !GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		QueryParams);
+}
+
+FOverwatchBoundaryLine AStrategyPlayerController::MakeOverwatchBoundaryLine(
+	const AStrategyUnit* Unit,
+	const FVector& Direction,
+	const TArray<FIntPoint>& Cells) const
+{
+	FOverwatchBoundaryLine BoundaryLine;
+	if (!Unit || !GridManager || Cells.Num() == 0)
+	{
+		return BoundaryLine;
+	}
+
+	FVector FlatDirection(Direction.X, Direction.Y, 0.0f);
+	if (!FlatDirection.Normalize())
+	{
+		FlatDirection = Unit->GetActorForwardVector();
+		FlatDirection.Z = 0.0f;
+		FlatDirection.Normalize();
+	}
+
+	const FVector Origin = Unit->GetActorLocation();
+	const float HalfCell = GridManager->CellSize * 0.5f;
+
+	bool bHasLeft = false;
+	bool bHasRight = false;
+	float LeftDistanceSq = 0.0f;
+	float RightDistanceSq = 0.0f;
+	float LeftSignedAngle = TNumericLimits<float>::Lowest();
+	float RightSignedAngle = TNumericLimits<float>::Max();
+	FVector LeftEnd = Origin;
+	FVector RightEnd = Origin;
+
+	auto GetBoundaryCorner = [this, Origin, FlatDirection, HalfCell](const FIntPoint& Cell, bool bLeftSide)
+	{
+		const FVector Center = GridManager->GridToWorld(Cell);
+		const FVector Corners[] =
+		{
+			Center + FVector(-HalfCell, -HalfCell, 0.0f),
+			Center + FVector(HalfCell, -HalfCell, 0.0f),
+			Center + FVector(HalfCell, HalfCell, 0.0f),
+			Center + FVector(-HalfCell, HalfCell, 0.0f)
+		};
+
+		FVector BestCorner = Corners[0];
+		float BestSignedAngle = bLeftSide ? TNumericLimits<float>::Lowest() : TNumericLimits<float>::Max();
+		float BestDistanceSq = 0.0f;
+
+		for (const FVector& Corner : Corners)
+		{
+			FVector ToCorner(Corner.X - Origin.X, Corner.Y - Origin.Y, 0.0f);
+			const float DistanceSq = ToCorner.SizeSquared();
+			if (DistanceSq <= KINDA_SMALL_NUMBER || !ToCorner.Normalize())
+			{
+				continue;
+			}
+
+			const float SignedAngle = FMath::Atan2(
+				FVector::CrossProduct(FlatDirection, ToCorner).Z,
+				FVector::DotProduct(FlatDirection, ToCorner));
+
+			const bool bBetterLeft = bLeftSide
+				&& (SignedAngle > BestSignedAngle
+					|| (FMath::IsNearlyEqual(SignedAngle, BestSignedAngle) && DistanceSq > BestDistanceSq));
+			const bool bBetterRight = !bLeftSide
+				&& (SignedAngle < BestSignedAngle
+					|| (FMath::IsNearlyEqual(SignedAngle, BestSignedAngle) && DistanceSq > BestDistanceSq));
+
+			if (bBetterLeft || bBetterRight)
+			{
+				BestSignedAngle = SignedAngle;
+				BestDistanceSq = DistanceSq;
+				BestCorner = Corner;
+			}
+		}
+
+		return BestCorner;
+	};
+
+	for (const FIntPoint& Cell : Cells)
+	{
+		const FVector Center = GridManager->GridToWorld(Cell);
+		FVector ToCell(Center.X - Origin.X, Center.Y - Origin.Y, 0.0f);
+		const float DistanceSq = ToCell.SizeSquared();
+		if (DistanceSq <= KINDA_SMALL_NUMBER || !ToCell.Normalize())
+		{
+			continue;
+		}
+
+		const float SignedAngle = FMath::Atan2(
+			FVector::CrossProduct(FlatDirection, ToCell).Z,
+			FVector::DotProduct(FlatDirection, ToCell));
+
+		if (SignedAngle >= 0.0f
+			&& (!bHasLeft
+				|| SignedAngle > LeftSignedAngle
+				|| (FMath::IsNearlyEqual(SignedAngle, LeftSignedAngle) && DistanceSq > LeftDistanceSq)))
+		{
+			bHasLeft = true;
+			LeftSignedAngle = SignedAngle;
+			LeftDistanceSq = DistanceSq;
+			LeftEnd = GetBoundaryCorner(Cell, true);
+		}
+
+		if (SignedAngle <= 0.0f
+			&& (!bHasRight
+				|| SignedAngle < RightSignedAngle
+				|| (FMath::IsNearlyEqual(SignedAngle, RightSignedAngle) && DistanceSq > RightDistanceSq)))
+		{
+			bHasRight = true;
+			RightSignedAngle = SignedAngle;
+			RightDistanceSq = DistanceSq;
+			RightEnd = GetBoundaryCorner(Cell, false);
+		}
+	}
+
+	BoundaryLine.Origin = Origin;
+	BoundaryLine.LeftEnd = bHasLeft ? LeftEnd : Origin;
+	BoundaryLine.RightEnd = bHasRight ? RightEnd : Origin;
+	return BoundaryLine;
+}
+
 bool AStrategyPlayerController::IsSelectableUnit(const AStrategyUnit* Unit) const
 {
 	return Unit && Unit->GetStrategyUnitTeam() == EStrategyUnitTeam::Human;
@@ -1125,7 +1631,7 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 		break;
 
 	case EPlayerUnitActionType::Overwatch:
-//		SelectedUnit->EnterOverwatch();
+		BeginOverwatchPlacement(SelectedUnit);
 		RefreshActionBar();
 		break;
 
@@ -1236,6 +1742,14 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Weapon is full or no AP")
 	});
 
+	Actions.Add({
+		EPlayerUnitActionType::Overwatch,
+		FText::FromString("Overwatch"),
+		nullptr,
+		SelectedUnit->CanOverwatch(),
+		FText::FromString("No AP")
+	});
+
 /*
 	Actions.Add({
 		EPlayerUnitActionType::HunkerDown,
@@ -1243,14 +1757,6 @@ void AStrategyPlayerController::RefreshActionBar()
 		nullptr,
 		SelectedUnit->CanHunkerDown(),
 		FText::FromString("No AP")
-	});
-
-	Actions.Add({
-		EPlayerUnitActionType::Overwatch,
-		FText::FromString("Overwatch"),
-		nullptr,
-		SelectedUnit->CanOverwatch(),
-		FText::FromString("No AP or no weapon")
 	});
 
 	Actions.Add({

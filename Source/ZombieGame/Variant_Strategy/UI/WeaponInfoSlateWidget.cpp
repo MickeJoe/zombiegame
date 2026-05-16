@@ -13,8 +13,8 @@
 namespace
 {
 	const FLinearColor PanelColor(0.025f, 0.09f, 0.12f, 0.92f);
-	const FLinearColor AccentBlue(0.0f, 0.62f, 1.0f, 1.0f);
-	const FLinearColor AccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
+	const FLinearColor WeaponInfoAccentBlue(0.0f, 0.62f, 1.0f, 1.0f);
+	const FLinearColor WeaponInfoAccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
 	const FLinearColor PipFilled(0.0f, 0.72f, 1.0f, 1.0f);
 	const FLinearColor PipEmpty(0.0f, 0.72f, 1.0f, 0.24f);
 }
@@ -120,7 +120,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(const FStrategyWeaponInstance& Weapon)
 			.Text(WeaponData->DisplayName.IsEmpty()
 				? FText::FromName(WeaponData->WeaponId)
 				: WeaponData->DisplayName)
-			.ColorAndOpacity(AccentBlue)
+			.ColorAndOpacity(WeaponInfoAccentBlue)
 			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
 		]
 
@@ -162,7 +162,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(const FStrategyWeaponInstance& Weapon)
 			[
 				SNew(STextBlock)
 				.Text(FText::AsNumber(WeaponData->AttackStats.Damage))
-				.ColorAndOpacity(AccentYellow)
+				.ColorAndOpacity(WeaponInfoAccentYellow)
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 15))
 			]
 			+ SHorizontalBox::Slot()
@@ -181,7 +181,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(const FStrategyWeaponInstance& Weapon)
 			[
 				SNew(STextBlock)
 				.Text(FText::AsNumber(WeaponData->AttackStats.Range))
-				.ColorAndOpacity(AccentYellow)
+				.ColorAndOpacity(WeaponInfoAccentYellow)
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 15))
 			]
 		]

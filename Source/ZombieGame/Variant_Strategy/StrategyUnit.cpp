@@ -273,6 +273,7 @@ void AStrategyUnit::UseAtionPoints(int32 ActionPoints)
 void AStrategyUnit::ResetActionPoints()
 {
 	UsedActionPoints = 0;
+	ClearOverwatch();
 }
 
 int32 AStrategyUnit::GetRemainingActionPoints() const
@@ -619,6 +620,118 @@ void AStrategyUnit::ReloadWeapon()
 	{
 		FireWeapon->CurrentAmmo = FireWeapon->GetMaxAmmo();
 	}
+}
+
+bool AStrategyUnit::CanOverwatch() const
+{
+	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
+	if (!FireWeapon.WeaponData)
+	{
+		return false;
+	}
+
+	if (FireWeapon.UsesAmmo() && FireWeapon.CurrentAmmo <= 0)
+	{
+		return false;
+	}
+
+	return GetRemainingActionPoints() > 0;
+}
+
+int32 AStrategyUnit::GetOverwatchRange() const
+{
+	if (const FAttackStats* AttackStats = GetEquippedFireWeapon().GetAttackStats())
+	{
+		return FMath::Max(AttackStats->Range, 1);
+	}
+
+	return 1;
+}
+
+void AStrategyUnit::EnterOverwatch(
+	const FVector& Direction,
+	int32 Range,
+	float AngleDegrees,
+	const TArray<FIntPoint>& Cells)
+{
+	if (!CanOverwatch())
+	{
+		return;
+	}
+
+	FVector FlatDirection(Direction.X, Direction.Y, 0.0f);
+	if (!FlatDirection.Normalize())
+	{
+		FlatDirection = GetActorForwardVector();
+		FlatDirection.Z = 0.0f;
+		FlatDirection.Normalize();
+	}
+
+	bOverwatchActive = true;
+	OverwatchDirection = FlatDirection;
+	OverwatchRange = FMath::Max(Range, 1);
+	OverwatchAngleDegrees = AngleDegrees;
+	OverwatchCells = Cells;
+
+	UseAtionPoints(GetRemainingActionPoints());
+}
+
+void AStrategyUnit::ClearOverwatch()
+{
+	bOverwatchActive = false;
+	OverwatchRange = 0;
+	OverwatchCells.Empty();
+}
+
+bool AStrategyUnit::TryFireOverwatchAt(AStrategyUnit* Target)
+{
+	if (!bOverwatchActive || !IsValid(Target) || Target->GetCurrentHealth() <= 0)
+	{
+		return false;
+	}
+
+	FStrategyWeaponInstance* FireWeapon = nullptr;
+	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		FireWeapon = &TwoHandedWeapon;
+	}
+	else if (OneHandedFireWeapon.WeaponData)
+	{
+		FireWeapon = &OneHandedFireWeapon;
+	}
+
+	if (!FireWeapon || !FireWeapon->WeaponData)
+	{
+		ClearOverwatch();
+		return false;
+	}
+
+	if (FireWeapon->UsesAmmo() && FireWeapon->CurrentAmmo <= 0)
+	{
+		ClearOverwatch();
+		return false;
+	}
+
+	const FAttackStats* AttackStats = FireWeapon->GetAttackStats();
+	if (!AttackStats)
+	{
+		ClearOverwatch();
+		return false;
+	}
+
+	FWeaponDamage Damage;
+	Damage.Damage = AttackStats->Damage;
+	Damage.ArmorPierce = AttackStats->ArmorPenetration;
+	Damage.ArmorShred = AttackStats->ArmorShred;
+
+	if (FireWeapon->UsesAmmo())
+	{
+		FireWeapon->CurrentAmmo = FMath::Max(FireWeapon->CurrentAmmo - 1, 0);
+	}
+
+	Target->ApplyDamage(Damage);
+	ClearOverwatch();
+	return true;
 }
 
 void AStrategyUnit::StartMeleeAttackMode()
