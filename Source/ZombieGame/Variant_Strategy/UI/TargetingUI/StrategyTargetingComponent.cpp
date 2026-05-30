@@ -123,11 +123,20 @@ void UStrategyTargetingComponent::EnterCameraView()
 		return;
 	}
 
+	bChangedCameraView = false;
+
+	if (TargetingCameraView == EStrategyTargetingCameraView::NoViewChange)
+	{
+		return;
+	}
+
 	PreviousViewTarget = PC->GetViewTarget();
 	if (!PreviousViewTarget)
 	{
 		PreviousViewTarget = PC->GetPawn();
 	}
+
+	Attacker->SetTargetingCameraView(TargetingCameraView);
 
 	PC->SetViewTargetWithBlend(
 		Attacker,
@@ -135,6 +144,7 @@ void UStrategyTargetingComponent::EnterCameraView()
 		EViewTargetBlendFunction::VTBlend_Cubic
 	);
 
+	bChangedCameraView = true;
 	PC->bShowMouseCursor = false;
 
 	FInputModeGameOnly InputMode;
@@ -183,9 +193,12 @@ void UStrategyTargetingComponent::ExitFireMode()
 	if (StrategyPC)
 	{
 		StrategyPC->SuppressSelectionInputBriefly();
-		StrategyPC->RestoreTacticalView();
+		if (bChangedCameraView)
+		{
+			StrategyPC->RestoreTacticalView();
+		}
 	}
-	else if (PC && PreviousViewTarget)
+	else if (PC && PreviousViewTarget && bChangedCameraView)
 	{
 		PC->SetViewTargetWithBlend(
 			PreviousViewTarget,
@@ -212,8 +225,14 @@ void UStrategyTargetingComponent::ExitFireMode()
 		}
 	}
 
+	if (Attacker)
+	{
+		Attacker->ClearTargetingCameraView();
+	}
+
 	bIsInFireMode = false;
 	bIsResolvingAttack = false;
+	bChangedCameraView = false;
 	TargetingMode = EStrategyTargetingMode::Fire;
 	Attacker = nullptr;
 	Targets.Reset();

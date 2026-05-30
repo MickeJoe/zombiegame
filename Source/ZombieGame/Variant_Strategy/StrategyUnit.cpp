@@ -89,6 +89,14 @@ AStrategyUnit::AStrategyUnit()
 	FirstPersonCamera->SetRelativeLocation(FVector(30.f, 0.f, 90.f));
 	FirstPersonCamera->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
 	FirstPersonCamera->bUsePawnControlRotation = false;
+	FirstPersonCamera->SetAutoActivate(false);
+
+	ThirdPersonTargetingCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonTargetingCamera"));
+	ThirdPersonTargetingCamera->SetupAttachment(GetRootComponent());
+	ThirdPersonTargetingCamera->SetRelativeLocation(ThirdPersonTargetingCameraRelativeLocation);
+	ThirdPersonTargetingCamera->SetRelativeRotation(ThirdPersonTargetingCameraRelativeRotation);
+	ThirdPersonTargetingCamera->bUsePawnControlRotation = false;
+	ThirdPersonTargetingCamera->SetAutoActivate(false);
 	
 	TargetBracketWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("TargetBracketWidget"));
 	TargetBracketWidget->SetupAttachment(RootComponent);
@@ -106,6 +114,7 @@ void AStrategyUnit::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
+	ApplyTargetingCameraSettings();
 	ConfigureVisualComponentsForTacticalMovement();
 	UpdateMeleeWeaponVisual();
 }
@@ -114,6 +123,7 @@ void AStrategyUnit::BeginPlay()
 {
 	Super::BeginPlay();
 
+	ApplyTargetingCameraSettings();
 	ConfigureVisualComponentsForTacticalMovement();
 	UpdateMeleeWeaponVisual();
 
@@ -963,6 +973,15 @@ void AStrategyUnit::ConfigureVisualComponentsForTacticalMovement()
 	}
 }
 
+void AStrategyUnit::ApplyTargetingCameraSettings()
+{
+	if (ThirdPersonTargetingCamera)
+	{
+		ThirdPersonTargetingCamera->SetRelativeLocation(ThirdPersonTargetingCameraRelativeLocation);
+		ThirdPersonTargetingCamera->SetRelativeRotation(ThirdPersonTargetingCameraRelativeRotation);
+	}
+}
+
 void AStrategyUnit::StartWeaponAttackMode()
 {
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
@@ -1196,6 +1215,45 @@ void AStrategyUnit::SetTargetInfoVisible(bool bVisible)
 	if (TargetInfoWidget)
 	{
 		TargetInfoWidget->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+}
+
+void AStrategyUnit::SetTargetingCameraView(EStrategyTargetingCameraView CameraView)
+{
+	ClearTargetingCameraView();
+
+	switch (CameraView)
+	{
+	case EStrategyTargetingCameraView::FirstPerson:
+		if (FirstPersonCamera)
+		{
+			FirstPersonCamera->SetActive(true);
+		}
+		break;
+
+	case EStrategyTargetingCameraView::ThirdPerson:
+		if (ThirdPersonTargetingCamera)
+		{
+			ThirdPersonTargetingCamera->SetActive(true);
+		}
+		break;
+
+	case EStrategyTargetingCameraView::NoViewChange:
+	default:
+		break;
+	}
+}
+
+void AStrategyUnit::ClearTargetingCameraView()
+{
+	if (FirstPersonCamera)
+	{
+		FirstPersonCamera->SetActive(false);
+	}
+
+	if (ThirdPersonTargetingCamera)
+	{
+		ThirdPersonTargetingCamera->SetActive(false);
 	}
 }
 

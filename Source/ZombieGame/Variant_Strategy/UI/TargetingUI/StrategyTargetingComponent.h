@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "TimerManager.h"
+#include "Variant_Strategy/TargetingCameraMode.h"
 #include "StrategyTargetingComponent.generated.h"
 
 class UTargetingHUDWidget;
@@ -32,6 +33,9 @@ public:
 	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Camera")
+	EStrategyTargetingCameraView TargetingCameraView = EStrategyTargetingCameraView::NoViewChange;
 
 private:
 	bool EnterAttackMode(AStrategyUnit* InAttacker, const TArray<AStrategyUnit*>& InTargets, EStrategyTargetingMode InMode);
@@ -67,5 +71,6 @@ private:
 	EStrategyTargetingMode TargetingMode = EStrategyTargetingMode::Fire;
 	bool bIsInFireMode = false;
 	bool bIsResolvingAttack = false;
+	bool bChangedCameraView = false;
 	FTimerHandle ExitFireModeTimerHandle;
 };

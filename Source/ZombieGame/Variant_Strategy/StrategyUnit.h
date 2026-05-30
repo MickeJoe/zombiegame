@@ -7,6 +7,7 @@
 #include "AIController.h"
 #include "Data/Weapon/AttackStats.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
+#include "TargetingCameraMode.h"
 #include "StrategyUnit.generated.h"
 
 class UTargetInfoWidget;
@@ -197,6 +198,8 @@ public:
 	
 	void SetTargetBracketVisible(bool bVisible);
 	void SetTargetInfoVisible(bool bVisible);	
+	void SetTargetingCameraView(EStrategyTargetingCameraView CameraView);
+	void ClearTargetingCameraView();
 
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
@@ -262,6 +265,15 @@ protected:
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat Camera")
+	TObjectPtr<UCameraComponent> ThirdPersonTargetingCamera;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat Camera|Third Person")
+	FVector ThirdPersonTargetingCameraRelativeLocation = FVector(-340.0f, 170.0f, 145.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat Camera|Third Person")
+	FRotator ThirdPersonTargetingCameraRelativeRotation = FRotator(-10.0f, -14.0f, 0.0f);
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<UWidgetComponent> TargetBracketWidget;
@@ -275,6 +287,7 @@ private:
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
 	void UpdateMeleeWeaponVisual();
 	void ConfigureVisualComponentsForTacticalMovement();
+	void ApplyTargetingCameraSettings();
 	void ScheduleDeathRemoval(float DelaySeconds);
 	
 	AStrategyGameMode* GetStrategyGameMode() const;	

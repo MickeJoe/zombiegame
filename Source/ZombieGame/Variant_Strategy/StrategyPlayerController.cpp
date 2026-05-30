@@ -38,14 +38,14 @@
 
 namespace
 {
-	static TAutoConsoleVariable<int32> CVarOverwatchDebug(
+	static TAutoConsoleVariable<int32> CVarStrategyPlayerOverwatchDebug(
 		TEXT("zg.OverwatchDebug"),
 		1,
 		TEXT("Logs overwatch placement and decal projection diagnostics."));
 
-	bool IsOverwatchDebugEnabled()
+	bool IsStrategyPlayerOverwatchDebugEnabled()
 	{
-		return CVarOverwatchDebug.GetValueOnGameThread() != 0;
+		return CVarStrategyPlayerOverwatchDebug.GetValueOnGameThread() != 0;
 	}
 }
 
@@ -1239,7 +1239,7 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 {
 	if (!IsValid(Unit) || !Unit->CanOverwatch())
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement blocked Unit=%s IsValid=%d CanOverwatch=%d"),
 				*GetNameSafe(Unit),
@@ -1249,7 +1249,7 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 		return;
 	}
 
-	if (IsOverwatchDebugEnabled())
+	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement Unit=%s AP=%d Range=%d HighlightActor=%s Grid=%s ConeAngle=%.1f"),
 			*GetNameSafe(Unit),
@@ -1278,7 +1278,7 @@ void AStrategyPlayerController::UpdateOverwatchPlacementPreview()
 {
 	if (!bIsPlacingOverwatch || !IsValid(OverwatchPlacementUnit) || !GridManager || !HighlightActor)
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview skipped bPlacing=%d Unit=%s Grid=%s HighlightActor=%s"),
 				bIsPlacingOverwatch,
@@ -1292,7 +1292,7 @@ void AStrategyPlayerController::UpdateOverwatchPlacementPreview()
 	FVector AimLocation;
 	if (!GetLocationUnderCursor(AimLocation))
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview cursor trace failed TraceChannel=%d"),
 				static_cast<int32>(SelectionTraceChannel.GetValue()));
@@ -1306,7 +1306,7 @@ void AStrategyPlayerController::UpdateOverwatchPlacementPreview()
 		OverwatchPlacementDirection,
 		OverwatchPreviewCells);
 
-	if (IsOverwatchDebugEnabled())
+	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Preview Aim=%s Direction=%s Cells=%d Range=%d"),
 			*AimLocation.ToCompactString(),
@@ -1322,7 +1322,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 {
 	if (!bIsPlacingOverwatch || !IsValid(OverwatchPlacementUnit))
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm failed, no valid placement Unit=%s bPlacing=%d"),
 				*GetNameSafe(OverwatchPlacementUnit),
@@ -1335,7 +1335,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 	FVector AimLocation;
 	if (!GetLocationUnderCursor(AimLocation))
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm cursor trace failed"));
 		}
@@ -1346,7 +1346,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 	OverwatchPreviewCells = BuildOverwatchConeCells(OverwatchPlacementUnit, AimLocation);
 	if (OverwatchPreviewCells.Num() == 0)
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm produced zero cells Aim=%s Unit=%s"),
 				*AimLocation.ToCompactString(),
@@ -1356,7 +1356,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 		return;
 	}
 
-	if (IsOverwatchDebugEnabled())
+	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm Unit=%s APBefore=%d Aim=%s Direction=%s Cells=%d Range=%d"),
 			*GetNameSafe(OverwatchPlacementUnit),
@@ -1390,7 +1390,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 
 void AStrategyPlayerController::CancelOverwatchPlacement()
 {
-	if (IsOverwatchDebugEnabled())
+	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Cancel placement Unit=%s Cells=%d"),
 			*GetNameSafe(OverwatchPlacementUnit),
@@ -1458,7 +1458,7 @@ TArray<FIntPoint> AStrategyPlayerController::BuildOverwatchConeCells(const AStra
 	TArray<FIntPoint> Cells;
 	if (!Unit || !GridManager)
 	{
-		if (IsOverwatchDebugEnabled())
+		if (IsStrategyPlayerOverwatchDebugEnabled())
 		{
 			UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BuildCone aborted Unit=%s Grid=%s"),
 				*GetNameSafe(Unit),
@@ -1530,7 +1530,7 @@ TArray<FIntPoint> AStrategyPlayerController::BuildOverwatchConeCells(const AStra
 		}
 	}
 
-	if (IsOverwatchDebugEnabled())
+	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BuildCone Unit=%s UnitCell=%s Aim=%s Direction=%s Range=%d Angle=%.1f Cells=%d Invalid=%d OutOfRange=%d OutsideAngle=%d Blocked=%d"),
 			*GetNameSafe(Unit),
