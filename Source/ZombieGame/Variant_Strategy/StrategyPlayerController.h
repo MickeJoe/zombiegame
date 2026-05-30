@@ -10,9 +10,12 @@
 
 enum class EPlayerUnitActionType : uint8;
 class SWeaponInfoSlateWidget;
+class SWeaponDebugSlateWidget;
 class UTargetingHUDWidget;
 class UTargetingActionBarWidget;
 class UStrategyTargetingComponent;
+class UStrategyWeaponData;
+class UStrategyWeaponDatabase;
 class UPlayerUnitRosterWidget;
 class AStrategyGameMode;
 class AStrategyUnit;
@@ -407,6 +410,18 @@ public:
 	void RefreshActionBar();
 	void SetAlwaysMeleeAttackEnabled(bool bEnabled);
 	bool IsAlwaysMeleeAttackEnabled() const { return bAlwaysMeleeAttackEnabled; }
+
+	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
+	void ToggleWeaponDebugMenu();
+
+	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
+	void ShowWeaponDebugMenu();
+
+	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
+	void HideWeaponDebugMenu();
+
+	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
+	void DebugEquipWeapon(FName WeaponId);
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
@@ -431,13 +446,16 @@ protected:
 	float CoverIndicatorInset = 18.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch")
-	float OverwatchConeAngleDegrees = 90.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch")
 	float OverwatchLineOfSightHeightOffset = 70.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float OverwatchMinGroundNormalZ = 0.65f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Debug|Weapons")
+	TObjectPtr<UStrategyWeaponDatabase> WeaponDatabase;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Debug|Weapons")
+	bool bEnableWeaponDebugMenu = true;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AStrategyUnit> OverwatchPlacementUnit = nullptr;
@@ -450,6 +468,7 @@ protected:
 
 	bool bIsPlacingOverwatch = false;
 	bool bAlwaysMeleeAttackEnabled = false;
+	bool bWasWeaponDebugHotkeyDown = false;
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;
@@ -459,7 +478,14 @@ private:
 	UStrategyTargetingComponent* EnsureTargetingComponent();
 	void EnsureWeaponInfoSlateWidget();
 	void UpdateWeaponInfoSlateWidget(AStrategyUnit* SelectedUnit);
+	void EnsureWeaponDebugSlateWidget();
+	void UpdateWeaponDebugSlateWidget();
+	void HandleDebugWeaponPicked(UStrategyWeaponData* WeaponData);
+	TArray<AStrategyUnit*> GetWeaponDebugTargetUnits() const;
+	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
+	UStrategyWeaponData* FindDebugWeapon(FName WeaponId) const;
 
 	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;
+	TSharedPtr<SWeaponDebugSlateWidget> WeaponDebugSlateWidget;
 	
 };

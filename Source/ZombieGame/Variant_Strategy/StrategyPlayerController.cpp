@@ -25,6 +25,8 @@
 #include "Player/AIStrategySide.h"
 #include "Player/PlayerStrategySide.h"
 #include "Systems/GridManager.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Data/Weapon/StrategyWeaponDatabase.h"
 #include "Data/Weapon/StrategyWeaponData.h"
 #include "Blueprint/UserWidget.h"
 #include "TargetingUI/TargetingHUDWidget.h"
@@ -32,9 +34,11 @@
 #include "UI/EndTurnWidget.h"
 #include "UI/PlayerUnitRosterWidget.h"
 #include "UI/UnitActionBarWidget.h"
+#include "UI/WeaponDebugSlateWidget.h"
 #include "UI/WeaponInfoSlateWidget.h"
 #include "UI/TargetingUI//StrategyTargetingComponent.h"
 #include "ZombieGame.h"
+#include "Widgets/Layout/SConstraintCanvas.h"
 
 namespace
 {
@@ -249,6 +253,16 @@ void AStrategyPlayerController::SetupInputComponent()
 void AStrategyPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	if (IsLocalController() && bEnableWeaponDebugMenu)
+	{
+		const bool bIsWeaponDebugHotkeyDown = IsInputKeyDown(EKeys::I);
+		if (bIsWeaponDebugHotkeyDown && !bWasWeaponDebugHotkeyDown)
+		{
+			ToggleWeaponDebugMenu();
+		}
+		bWasWeaponDebugHotkeyDown = bIsWeaponDebugHotkeyDown;
+	}
 
 	if (bIsPlacingOverwatch)
 	{
@@ -1257,7 +1271,7 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 			Unit->GetOverwatchRange(),
 			*GetNameSafe(HighlightActor),
 			*GetNameSafe(GridManager),
-			OverwatchConeAngleDegrees);
+			Unit->GetOverwatchConeAngleDegrees());
 	}
 
 	OverwatchPlacementUnit = Unit;
@@ -1370,7 +1384,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 	OverwatchPlacementUnit->EnterOverwatch(
 		OverwatchPlacementDirection,
 		OverwatchPlacementUnit->GetOverwatchRange(),
-		OverwatchConeAngleDegrees,
+		OverwatchPlacementUnit->GetOverwatchConeAngleDegrees(),
 		OverwatchPreviewCells);
 
 	if (HighlightActor)
@@ -1480,6 +1494,7 @@ TArray<FIntPoint> AStrategyPlayerController::BuildOverwatchConeCells(const AStra
 
 	const FIntPoint UnitCell = GridManager->WorldToGrid(UnitLocation);
 	const int32 Range = FMath::Max(Unit->GetOverwatchRange(), 1);
+	const float OverwatchConeAngleDegrees = Unit->GetOverwatchConeAngleDegrees();
 	const float HalfAngleRadians = FMath::DegreesToRadians(OverwatchConeAngleDegrees * 0.5f);
 	const float MinDot = FMath::Cos(HalfAngleRadians);
 	int32 InvalidCells = 0;
@@ -2194,6 +2209,7 @@ void AStrategyPlayerController::RefreshWeaponInfoPanel()
 
 	EnsureWeaponInfoSlateWidget();
 	UpdateWeaponInfoSlateWidget(SelectedUnit);
+	UpdateWeaponDebugSlateWidget();
 }
 
 void AStrategyPlayerController::SuppressSelectionInputBriefly()
@@ -2222,6 +2238,244 @@ void AStrategyPlayerController::UpdateWeaponInfoSlateWidget(AStrategyUnit* Selec
 	{
 		WeaponInfoSlateWidget->SetUnit(SelectedUnit);
 	}
+}
+
+void AStrategyPlayerController::ToggleWeaponDebugMenu()
+{
+	if (!bEnableWeaponDebugMenu)
+	{
+		return;
+	}
+
+	EnsureWeaponDebugSlateWidget();
+	if (!WeaponDebugSlateWidget.IsValid())
+	{
+		return;
+	}
+
+	const EVisibility CurrentVisibility = WeaponDebugSlateWidget->GetVisibility();
+	if (CurrentVisibility == EVisibility::Visible)
+	{
+		HideWeaponDebugMenu();
+	}
+	else
+	{
+		ShowWeaponDebugMenu();
+	}
+}
+
+void AStrategyPlayerController::ShowWeaponDebugMenu()
+{
+	if (!bEnableWeaponDebugMenu)
+	{
+		return;
+	}
+
+	EnsureWeaponDebugSlateWidget();
+	if (WeaponDebugSlateWidget.IsValid())
+	{
+		UpdateWeaponDebugSlateWidget();
+		WeaponDebugSlateWidget->SetVisibility(EVisibility::Visible);
+	}
+}
+
+void AStrategyPlayerController::HideWeaponDebugMenu()
+{
+	if (WeaponDebugSlateWidget.IsValid())
+	{
+		WeaponDebugSlateWidget->SetVisibility(EVisibility::Collapsed);
+	}
+}
+
+void AStrategyPlayerController::DebugEquipWeapon(FName WeaponId)
+{
+	UStrategyWeaponData* Weapon = FindDebugWeapon(WeaponId);
+	if (!Weapon)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DebugEquipWeapon failed: no weapon with id '%s'"), *WeaponId.ToString());
+		return;
+	}
+
+	HandleDebugWeaponPicked(Weapon);
+}
+
+void AStrategyPlayerController::EnsureWeaponDebugSlateWidget()
+{
+	if (WeaponDebugSlateWidget.IsValid() || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+
+	GEngine->GameViewport->AddViewportWidgetContent(
+		SNew(SConstraintCanvas)
+		+ SConstraintCanvas::Slot()
+		.Anchors(FAnchors(1.0f, 0.0f))
+		.Alignment(FVector2D(1.0f, 0.0f))
+		.Offset(FMargin(-24.0f, 180.0f, 320.0f, 520.0f))
+		[
+			SAssignNew(WeaponDebugSlateWidget, SWeaponDebugSlateWidget)
+			.OnWeaponPicked(FOnDebugWeaponPicked::CreateUObject(this, &AStrategyPlayerController::HandleDebugWeaponPicked))
+		],
+		6000);
+
+	WeaponDebugSlateWidget->SetVisibility(EVisibility::Collapsed);
+	UpdateWeaponDebugSlateWidget();
+}
+
+void AStrategyPlayerController::UpdateWeaponDebugSlateWidget()
+{
+	if (WeaponDebugSlateWidget.IsValid())
+	{
+		WeaponDebugSlateWidget->SetContext(GetWeaponDebugTargetUnits(), GetDebugWeapons());
+	}
+}
+
+void AStrategyPlayerController::HandleDebugWeaponPicked(UStrategyWeaponData* WeaponData)
+{
+	const TArray<AStrategyUnit*> Units = GetWeaponDebugTargetUnits();
+	if (Units.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Weapon debug equip ignored: no player units selected"));
+		return;
+	}
+
+	for (AStrategyUnit* Unit : Units)
+	{
+		if (IsValid(Unit))
+		{
+			if (WeaponData)
+			{
+				Unit->EquipWeapon(WeaponData);
+			}
+			else
+			{
+				Unit->ClearEquippedWeapons();
+			}
+		}
+	}
+
+	RefreshActionBar();
+	RefreshPlayerUnitRoster();
+	RefreshWeaponInfoPanel();
+
+	UE_LOG(LogTemp, Warning, TEXT("Weapon debug %s on %d unit(s)"),
+		WeaponData ? *FString::Printf(TEXT("equipped %s"), *GetNameSafe(WeaponData)) : TEXT("cleared weapons"),
+		Units.Num());
+}
+
+TArray<AStrategyUnit*> AStrategyPlayerController::GetWeaponDebugTargetUnits() const
+{
+	TArray<AStrategyUnit*> Units;
+
+	for (AStrategyUnit* Unit : ControlledUnits)
+	{
+		if (IsValid(Unit) && IsSelectableUnit(Unit) && Unit->GetCurrentHealth() > 0)
+		{
+			Units.Add(Unit);
+		}
+	}
+
+	if (Units.Num() == 0 && IsValid(TargetUnit) && IsSelectableUnit(TargetUnit) && TargetUnit->GetCurrentHealth() > 0)
+	{
+		Units.Add(TargetUnit);
+	}
+
+	return Units;
+}
+
+TArray<UStrategyWeaponData*> AStrategyPlayerController::GetDebugWeapons() const
+{
+	TArray<UStrategyWeaponData*> Weapons;
+	TSet<UStrategyWeaponData*> SeenWeapons;
+
+	auto AddWeapon = [&Weapons, &SeenWeapons](UStrategyWeaponData* Weapon)
+	{
+		if (Weapon && !SeenWeapons.Contains(Weapon))
+		{
+			SeenWeapons.Add(Weapon);
+			Weapons.Add(Weapon);
+		}
+	};
+
+	if (WeaponDatabase)
+	{
+		for (UStrategyWeaponData* Weapon : WeaponDatabase->Weapons)
+		{
+			AddWeapon(Weapon);
+		}
+	}
+
+	if (Weapons.Num() == 0)
+	{
+		FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+		TArray<FAssetData> AssetDataList;
+		AssetRegistryModule.Get().GetAssetsByClass(UStrategyWeaponData::StaticClass()->GetClassPathName(), AssetDataList, true);
+
+		for (const FAssetData& AssetData : AssetDataList)
+		{
+			AddWeapon(Cast<UStrategyWeaponData>(AssetData.GetAsset()));
+		}
+	}
+
+	if (Weapons.Num() == 0)
+	{
+		FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+		TArray<FAssetData> AssetDataList;
+		AssetRegistryModule.Get().GetAssetsByPath(FName(TEXT("/Game")), AssetDataList, true);
+
+		for (const FAssetData& AssetData : AssetDataList)
+		{
+			FString NativeClass;
+			FString PrimaryAssetType;
+			AssetData.GetTagValue(FName(TEXT("NativeClass")), NativeClass);
+			AssetData.GetTagValue(FName(TEXT("PrimaryAssetType")), PrimaryAssetType);
+
+			const bool bLooksLikeWeaponData =
+				AssetData.AssetClassPath.GetAssetName() == UStrategyWeaponData::StaticClass()->GetFName()
+				|| NativeClass.Contains(TEXT("/Script/ZombieGame.StrategyWeaponData"))
+				|| PrimaryAssetType == TEXT("StrategyWeaponData");
+
+			if (bLooksLikeWeaponData)
+			{
+				AddWeapon(Cast<UStrategyWeaponData>(AssetData.GetAsset()));
+			}
+		}
+	}
+
+	if (Weapons.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Weapon debug menu found no StrategyWeaponData assets. Assign a StrategyWeaponDatabase asset or verify DA weapons are saved."));
+	}
+
+	Weapons.Sort([](const UStrategyWeaponData& Left, const UStrategyWeaponData& Right)
+	{
+		const FString LeftName = Left.DisplayName.IsEmpty() ? Left.WeaponId.ToString() : Left.DisplayName.ToString();
+		const FString RightName = Right.DisplayName.IsEmpty() ? Right.WeaponId.ToString() : Right.DisplayName.ToString();
+		return LeftName < RightName;
+	});
+
+	return Weapons;
+}
+
+UStrategyWeaponData* AStrategyPlayerController::FindDebugWeapon(FName WeaponId) const
+{
+	if (WeaponDatabase)
+	{
+		if (UStrategyWeaponData* Weapon = WeaponDatabase->FindWeaponById(WeaponId))
+		{
+			return Weapon;
+		}
+	}
+
+	for (UStrategyWeaponData* Weapon : GetDebugWeapons())
+	{
+		if (Weapon && Weapon->WeaponId == WeaponId)
+		{
+			return Weapon;
+		}
+	}
+
+	return nullptr;
 }
 
 PRAGMA_ENABLE_OPTIMIZATION

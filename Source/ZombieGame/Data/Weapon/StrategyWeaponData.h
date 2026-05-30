@@ -45,6 +45,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FAttackStats AttackStats;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch", meta=(ClampMin="1.0", ClampMax="360.0", Units="deg"))
+	float OverwatchConeAngleDegrees = 90.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 MaxAmmo = 0;
 

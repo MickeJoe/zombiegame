@@ -652,17 +652,9 @@ void AStrategyUnit::ReloadWeapon()
 bool AStrategyUnit::CanOverwatch() const
 {
 	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
-	if (!FireWeapon.WeaponData)
-	{
-		return false;
-	}
-
-	if (FireWeapon.UsesAmmo() && FireWeapon.CurrentAmmo <= 0)
-	{
-		return false;
-	}
-
-	return GetRemainingActionPoints() > 0;
+	return GetRemainingActionPoints() > 0
+		&& FireWeapon.WeaponData
+		&& FireWeapon.GetAttackStats();
 }
 
 int32 AStrategyUnit::GetOverwatchRange() const
@@ -673,6 +665,17 @@ int32 AStrategyUnit::GetOverwatchRange() const
 	}
 
 	return 1;
+}
+
+float AStrategyUnit::GetOverwatchConeAngleDegrees() const
+{
+	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
+	if (FireWeapon.WeaponData)
+	{
+		return FMath::Clamp(FireWeapon.WeaponData->OverwatchConeAngleDegrees, 1.0f, 360.0f);
+	}
+
+	return 90.0f;
 }
 
 void AStrategyUnit::EnterOverwatch(
@@ -1159,6 +1162,13 @@ void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
 	{
 		OneHandedMeleeWeapon.Init(WeaponData);
 	}
+}
+
+void AStrategyUnit::ClearEquippedWeapons()
+{
+	OneHandedFireWeapon = FStrategyWeaponInstance();
+	OneHandedMeleeWeapon = FStrategyWeaponInstance();
+	TwoHandedWeapon = FStrategyWeaponInstance();
 }
 
 const FStrategyWeaponInstance& AStrategyUnit::GetEquippedFireWeapon() const

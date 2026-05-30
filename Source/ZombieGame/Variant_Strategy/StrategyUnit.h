@@ -146,6 +146,7 @@ public:
 	void ReloadWeapon();
 	bool CanOverwatch() const;
 	int32 GetOverwatchRange() const;
+	float GetOverwatchConeAngleDegrees() const;
 	void EnterOverwatch(const FVector& Direction, int32 Range, float AngleDegrees, const TArray<FIntPoint>& Cells);
 	void ClearOverwatch();
 	bool TryFireOverwatchAt(AStrategyUnit* Target);
@@ -190,6 +191,7 @@ public:
 	float ApplyDamage(const FWeaponDamage& WeaponDamage);
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
+	void ClearEquippedWeapons();
 	const FStrategyWeaponInstance& GetEquippedWeapon() const { return GetEquippedFireWeapon(); }
 	const FStrategyWeaponInstance& GetEquippedFireWeapon() const;
 	const FStrategyWeaponInstance& GetEquippedMeleeWeapon() const;
