@@ -264,6 +264,7 @@ void UStrategyTargetingComponent::HandleFireClicked()
 	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
 	if (TargetingMode == EStrategyTargetingMode::Melee)
 	{
+		Attacker->PlayMeleeAttackMontage();
 		Attacker->SpendMeleeAttackResources();
 	}
 	else

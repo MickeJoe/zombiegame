@@ -50,6 +50,9 @@ public:
 	TSubclassOf<AStrategyUnit> PlayerUnitClass;
 
 	UPROPERTY(EditDefaultsOnly, Category="Units")
+	TArray<TSubclassOf<AStrategyUnit>> PlayerUnitClasses;
+
+	UPROPERTY(EditDefaultsOnly, Category="Units")
 	TSubclassOf<AStrategyUnit> EnemyUnitClass;
 	
 	UPROPERTY(BlueprintAssignable)

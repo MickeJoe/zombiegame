@@ -4,6 +4,7 @@
 #include "StrategyHUD.h"
 #include "StrategyUnit.h"
 #include "StrategyPlayerController.h"
+#include "Kismet/GameplayStatics.h"
 
 void AStrategyHUD::BeginPlay()
 {
@@ -33,9 +34,34 @@ void AStrategyHUD::DrawHUD()
 		{
 			DrawRect(SelectionBoxColor, BoxStart.X, BoxStart.Y, BoxSize.X, BoxSize.Y);
 
-			// get all the units in the selection box
+			// Project unit origins instead of actor bounds so visual mesh offsets do not affect selection.
 			TArray<AStrategyUnit*> BoxedUnits;
-			GetActorsInSelectionRectangle(BoxStart, BoxCurrentPosition, BoxedUnits, true);
+			TArray<AActor*> FoundActors;
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), AStrategyUnit::StaticClass(), FoundActors);
+
+			const float MinX = FMath::Min(BoxStart.X, BoxCurrentPosition.X);
+			const float MaxX = FMath::Max(BoxStart.X, BoxCurrentPosition.X);
+			const float MinY = FMath::Min(BoxStart.Y, BoxCurrentPosition.Y);
+			const float MaxY = FMath::Max(BoxStart.Y, BoxCurrentPosition.Y);
+
+			for (AActor* Actor : FoundActors)
+			{
+				AStrategyUnit* Unit = Cast<AStrategyUnit>(Actor);
+				if (!Unit || Unit->GetStrategyUnitTeam() != EStrategyUnitTeam::Human)
+				{
+					continue;
+				}
+
+				FVector2D ScreenLocation;
+				if (PC->ProjectWorldLocationToScreen(Unit->GetActorLocation(), ScreenLocation)
+					&& ScreenLocation.X >= MinX
+					&& ScreenLocation.X <= MaxX
+					&& ScreenLocation.Y >= MinY
+					&& ScreenLocation.Y <= MaxY)
+				{
+					BoxedUnits.Add(Unit);
+				}
+			}
 
 			// update the unit selection on the player controller
 			PC->DragSelectUnits(BoxedUnits);

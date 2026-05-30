@@ -15,7 +15,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "StrategyUnit.h"
 #include "NavigationSystem.h"
+#include "NavigationPath.h"
 #include "StrategyGameMode.h"
+#include "StrategyCheatManager.h"
 #include "Engine/OverlapResult.h"
 #include "TimerManager.h"
 #include "Engine/Engine.h"
@@ -65,6 +67,8 @@ AStrategyPlayerController::AStrategyPlayerController()
 	TargetingComponent = CreateDefaultSubobject<UStrategyTargetingComponent>(
 		TEXT("TargetingComponent")
 	);
+
+	CheatClass = UStrategyCheatManager::StaticClass();
 }
 
 void AStrategyPlayerController::BeginPlay()
@@ -249,6 +253,10 @@ void AStrategyPlayerController::PlayerTick(float DeltaTime)
 	if (bIsPlacingOverwatch)
 	{
 		UpdateOverwatchPlacementPreview();
+	}
+	else
+	{
+		UpdateMovementPreview();
 	}
 }
 
@@ -627,7 +635,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 	{
 
 		// update the target unit
-		TargetUnit = Cast<AStrategyUnit>(OutHit.GetActor());
+		TargetUnit = GetStrategyUnitFromHit(OutHit);
 
 		if (TargetUnit && IsSelectableUnit(TargetUnit))
 		{
@@ -724,7 +732,11 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 	if (HighlightActor)
 	{
 		HighlightActor->ClearReachableHighlights();
+		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearCoverIndicators();
 	}
+	LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+	LastMovementPreviewUnit = nullptr;
 
 	TargetUnit = nullptr;
 	
@@ -853,6 +865,8 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			if (HighlightActor)
 			{
 				HighlightActor->ClearReachableHighlights();
+				HighlightActor->ClearMovementPath();
+				HighlightActor->ClearCoverIndicators();
 			}
 			
 			// set up movement to the goal location
@@ -1004,11 +1018,44 @@ bool AStrategyPlayerController::GetLocationUnderCursor(FVector& Location)
 	// if there was a blocking hit, return the hit location
 	if (OutHit.bBlockingHit)
 	{
+		if (const AStrategyUnit* HitUnit = GetStrategyUnitFromHit(OutHit))
+		{
+			Location = HitUnit->GetActorLocation();
+			return true;
+		}
+
 		Location = OutHit.Location;
 		return true;
 	}
 
 	return OutHit.bBlockingHit;
+}
+
+AStrategyUnit* AStrategyPlayerController::GetStrategyUnitFromHit(const FHitResult& Hit) const
+{
+	AActor* HitActor = Hit.GetActor();
+	while (HitActor)
+	{
+		if (AStrategyUnit* Unit = Cast<AStrategyUnit>(HitActor))
+		{
+			return Unit;
+		}
+
+		HitActor = HitActor->GetAttachParentActor();
+	}
+
+	return nullptr;
+}
+
+void AStrategyPlayerController::AddAllStrategyUnitsToIgnoredActors(FCollisionQueryParams& QueryParams) const
+{
+	TArray<AActor*> Units;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AStrategyUnit::StaticClass(), Units);
+
+	for (AActor* Unit : Units)
+	{
+		QueryParams.AddIgnoredActor(Unit);
+	}
 }
 
 FVector AStrategyPlayerController::ProjectTouchPointToWorldSpace()
@@ -1093,6 +1140,8 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	{
 		ReachableCells.Empty();
 		HighlightActor->ClearReachableHighlights();
+		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+		LastMovementPreviewUnit = nullptr;
 		return;
 	}
 
@@ -1124,6 +1173,66 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	}
 
 	HighlightActor->ShowReachableCells(GridManager, ReachableCells);
+	LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+	LastMovementPreviewUnit = nullptr;
+}
+
+void AStrategyPlayerController::UpdateMovementPreview()
+{
+	if (!GridManager || !HighlightActor || ReachableCells.Num() == 0)
+	{
+		return;
+	}
+
+	AStrategyUnit* PreviewUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(PreviewUnit) || !IsSelectableUnit(PreviewUnit) || PreviewUnit->GetRemainingActionPoints() < 1)
+	{
+		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearCoverIndicators();
+		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+		LastMovementPreviewUnit = nullptr;
+		return;
+	}
+
+	FVector CursorLocation;
+	if (!GetLocationUnderCursor(CursorLocation))
+	{
+		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearCoverIndicators();
+		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+		LastMovementPreviewUnit = nullptr;
+		return;
+	}
+
+	const FIntPoint HoveredCell = GridManager->WorldToGrid(CursorLocation);
+	if (!ReachableCells.Contains(HoveredCell))
+	{
+		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearCoverIndicators();
+		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
+		LastMovementPreviewUnit = nullptr;
+		return;
+	}
+
+	if (LastMovementPreviewCell == HoveredCell && LastMovementPreviewUnit == PreviewUnit)
+	{
+		return;
+	}
+
+	LastMovementPreviewCell = HoveredCell;
+	LastMovementPreviewUnit = PreviewUnit;
+
+	TArray<FVector> PathPoints;
+	if (BuildMovementPathPreview(PreviewUnit, HoveredCell, PathPoints))
+	{
+		HighlightActor->ShowMovementPath(PathPoints);
+	}
+	else
+	{
+		HighlightActor->ClearMovementPath();
+	}
+
+	HighlightActor->ShowCoverIndicators(BuildCoverIndicatorsForCell(HoveredCell));
 }
 
 void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
@@ -1158,6 +1267,8 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 	if (HighlightActor)
 	{
 		HighlightActor->ClearReachableHighlights();
+		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearCoverIndicators();
 	}
 
 	UpdateOverwatchPlacementPreview();
@@ -1463,6 +1574,7 @@ bool AStrategyPlayerController::HasOverwatchLineOfSight(const AStrategyUnit* Uni
 	FHitResult Hit;
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(OverwatchLineOfSight), false);
 	QueryParams.AddIgnoredActor(Unit);
+	AddAllStrategyUnitsToIgnoredActors(QueryParams);
 
 	return !GetWorld()->LineTraceSingleByChannel(
 		Hit,
@@ -1470,6 +1582,128 @@ bool AStrategyPlayerController::HasOverwatchLineOfSight(const AStrategyUnit* Uni
 		End,
 		ECC_Visibility,
 		QueryParams);
+}
+
+bool AStrategyPlayerController::BuildMovementPathPreview(
+	const AStrategyUnit* Unit,
+	const FIntPoint& TargetCell,
+	TArray<FVector>& OutPathPoints) const
+{
+	OutPathPoints.Reset();
+	if (!Unit || !GridManager || !GetWorld())
+	{
+		return false;
+	}
+
+	FVector TargetLocation;
+	if (!GridManager->TryGetNavigationLocationForCell(TargetCell, TargetLocation))
+	{
+		return false;
+	}
+
+	UNavigationPath* NavigationPath = UNavigationSystemV1::FindPathToLocationSynchronously(
+		GetWorld(),
+		Unit->GetActorLocation(),
+		TargetLocation,
+		const_cast<AStrategyUnit*>(Unit));
+
+	if (!NavigationPath || NavigationPath->PathPoints.Num() < 2)
+	{
+		return false;
+	}
+
+	OutPathPoints = NavigationPath->PathPoints;
+	return true;
+}
+
+TArray<FGridCoverIndicator> AStrategyPlayerController::BuildCoverIndicatorsForCell(const FIntPoint& Cell) const
+{
+	TArray<FGridCoverIndicator> Indicators;
+	if (!GridManager)
+	{
+		return Indicators;
+	}
+
+	FVector GroundLocation;
+	if (!GridManager->TryGetNavigationLocationForCell(Cell, GroundLocation))
+	{
+		return Indicators;
+	}
+
+	const FIntPoint Directions[] =
+	{
+		FIntPoint(1, 0),
+		FIntPoint(-1, 0),
+		FIntPoint(0, 1),
+		FIntPoint(0, -1)
+	};
+
+	const float HalfCell = GridManager->CellSize * 0.5f;
+	for (const FIntPoint& Direction : Directions)
+	{
+		EGridCoverType CoverType = EGridCoverType::Half;
+		if (!GetCoverTypeForDirection(Cell, Direction, CoverType))
+		{
+			continue;
+		}
+
+		const FVector DirectionVector(
+			static_cast<float>(Direction.X),
+			static_cast<float>(Direction.Y),
+			0.0f);
+
+		FGridCoverIndicator Indicator;
+		Indicator.CoverType = CoverType;
+		Indicator.Direction = DirectionVector;
+		Indicator.Location = GroundLocation + DirectionVector * FMath::Max(0.0f, HalfCell - CoverIndicatorInset);
+		Indicators.Add(Indicator);
+	}
+
+	return Indicators;
+}
+
+bool AStrategyPlayerController::GetCoverTypeForDirection(
+	const FIntPoint& Cell,
+	const FIntPoint& Direction,
+	EGridCoverType& OutCoverType) const
+{
+	if (!GridManager || !GetWorld() || Direction == FIntPoint::ZeroValue)
+	{
+		return false;
+	}
+
+	const FVector CellCenter = GridManager->GridToWorld(Cell);
+	const FVector DirectionVector(
+		static_cast<float>(Direction.X),
+		static_cast<float>(Direction.Y),
+		0.0f);
+	const FVector TraceEndBase = CellCenter + DirectionVector * GridManager->CellSize;
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CoverTrace), false);
+	QueryParams.AddIgnoredActor(this);
+	QueryParams.AddIgnoredActor(GetPawn());
+	AddAllStrategyUnitsToIgnoredActors(QueryParams);
+
+	auto IsBlockedAtHeight = [this, &QueryParams, CellCenter, TraceEndBase](float Height)
+	{
+		FHitResult Hit;
+		return GetWorld()->LineTraceSingleByChannel(
+			Hit,
+			CellCenter + FVector(0.0f, 0.0f, Height),
+			TraceEndBase + FVector(0.0f, 0.0f, Height),
+			ECC_Visibility,
+			QueryParams);
+	};
+
+	if (!IsBlockedAtHeight(CoverHalfTraceHeight))
+	{
+		return false;
+	}
+
+	OutCoverType = IsBlockedAtHeight(CoverFullTraceHeight)
+		? EGridCoverType::Full
+		: EGridCoverType::Half;
+	return true;
 }
 
 FOverwatchBoundaryLine AStrategyPlayerController::MakeOverwatchBoundaryLine(
@@ -1609,12 +1843,14 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 	
 	if (!SelectedUnit)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Melee action ignored: no selected unit"));
 		return;
 	}
 
 	switch (ActionType)
 	{
 	case EPlayerUnitActionType::MeleeAttack:
+		UE_LOG(LogTemp, Warning, TEXT("Melee action clicked for %s"), *GetNameSafe(SelectedUnit));
 		SelectedUnit->StartMeleeAttackMode();
 		break;
 
@@ -1727,7 +1963,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		EPlayerUnitActionType::MeleeAttack,
 		FText::FromString("Melee"),
 		nullptr,
-		SelectedUnit->CanMeleeAttack(EnemySide),
+		bAlwaysMeleeAttackEnabled || SelectedUnit->CanMeleeAttack(EnemySide),
 		FText::FromString("No AP or no target")
 	});
 	
@@ -1776,6 +2012,12 @@ void AStrategyPlayerController::RefreshActionBar()
 */
 	UnitActionBarWidget->SetActions(Actions);
 	
+}
+
+void AStrategyPlayerController::SetAlwaysMeleeAttackEnabled(bool bEnabled)
+{
+	bAlwaysMeleeAttackEnabled = bEnabled;
+	RefreshActionBar();
 }
 
 void AStrategyPlayerController::RefreshPlayerUnitRoster()

@@ -19,8 +19,10 @@ class UWidgetComponent;
 class UEnemyUnitAI;
 class AGridManager;
 class AStrategySide;
+class UChildActorComponent;
 class USphereComponent;
 class UUnitData;
+class UAnimMontage;
 
 UENUM(BlueprintType)
 enum class EStrategyUnitTeam : uint8
@@ -75,6 +77,7 @@ public:
 	/** Constructor */
 	AStrategyUnit();
 	
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 
 protected:
@@ -137,6 +140,7 @@ public:
 	void SpendWeaponAttackResources();
 	void StartMeleeAttackMode();
 	void StartWeaponAttackMode();
+	float PlayMeleeAttackMontage();
 	bool CanReload() const;
 	void ReloadWeapon();
 	bool CanOverwatch() const;
@@ -206,6 +210,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FStrategyWeaponInstance TwoHandedWeapon;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
+	TSubclassOf<AActor> MeleeWeaponActorClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
+	FName MeleeWeaponSocketName = TEXT("hand_rSocket");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
+	FName MeleeWeaponMeshComponentName = TEXT("Body");
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
+	TObjectPtr<UChildActorComponent> MeleeWeaponActorComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Animation")
+	TObjectPtr<UAnimMontage> MeleeAttackMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Animation")
+	FName MeleeAttackMontageMeshComponentName = TEXT("Body");
+
 	UPROPERTY(Transient)
 	FStrategyWeaponInstance EmptyWeaponInstance;
 	
@@ -250,6 +272,9 @@ protected:
 private:
 	TArray<AStrategyUnit*> GetEnemiesInRange() const;
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
+	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
+	void UpdateMeleeWeaponVisual();
+	void ConfigureVisualComponentsForTacticalMovement();
 	void ScheduleDeathRemoval(float DelaySeconds);
 	
 	AStrategyGameMode* GetStrategyGameMode() const;	

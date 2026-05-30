@@ -23,6 +23,8 @@ class AStrategyPawn;
 class UInputMappingContext;
 class UNiagaraSystem;
 struct FInputActionValue;
+struct FCollisionQueryParams;
+struct FHitResult;
 class AStrategyHUD;
 class AStrategyNPC;
 class UInputAction;
@@ -362,6 +364,8 @@ protected:
 
 	/** Attempts to get the world location under the cursor, returns true if successful */
 	bool GetLocationUnderCursor(FVector& Location);
+	AStrategyUnit* GetStrategyUnitFromHit(const FHitResult& Hit) const;
+	void AddAllStrategyUnitsToIgnoredActors(FCollisionQueryParams& QueryParams) const;
 
 	/** Projects the current touch location into world space */
 	FVector ProjectTouchPointToWorldSpace();
@@ -377,6 +381,7 @@ protected:
 	void CheckTouchTap(bool& bTapped, bool& bDoubleTapped);
 	
 	void UpdateMovementHighlights();
+	void UpdateMovementPreview();
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
 	void RefreshPlayerUnitRoster();
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
@@ -386,6 +391,9 @@ protected:
 	TArray<FIntPoint> BuildOverwatchConeCells(const AStrategyUnit* Unit, const FVector& AimLocation);
 	bool HasOverwatchLineOfSight(const AStrategyUnit* Unit, const FIntPoint& Cell) const;
 	FOverwatchBoundaryLine MakeOverwatchBoundaryLine(const AStrategyUnit* Unit, const FVector& Direction, const TArray<FIntPoint>& Cells) const;
+	bool BuildMovementPathPreview(const AStrategyUnit* Unit, const FIntPoint& TargetCell, TArray<FVector>& OutPathPoints) const;
+	TArray<FGridCoverIndicator> BuildCoverIndicatorsForCell(const FIntPoint& Cell) const;
+	bool GetCoverTypeForDirection(const FIntPoint& Cell, const FIntPoint& Direction, EGridCoverType& OutCoverType) const;
 	
 	UFUNCTION()
 	void HandleUnitActionClicked(EPlayerUnitActionType ActionType);
@@ -397,6 +405,8 @@ protected:
 	void CenterCameraOnUnit(const AStrategyUnit* Unit);
 public:
 	void RefreshActionBar();
+	void SetAlwaysMeleeAttackEnabled(bool bEnabled);
+	bool IsAlwaysMeleeAttackEnabled() const { return bAlwaysMeleeAttackEnabled; }
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
@@ -404,6 +414,21 @@ protected:
 
 	UPROPERTY(Transient)
 	TArray<FIntPoint> ReachableCells;
+
+	UPROPERTY(Transient)
+	FIntPoint LastMovementPreviewCell = FIntPoint::ZeroValue;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AStrategyUnit> LastMovementPreviewUnit = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cover")
+	float CoverHalfTraceHeight = 80.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cover")
+	float CoverFullTraceHeight = 165.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cover")
+	float CoverIndicatorInset = 18.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Overwatch")
 	float OverwatchConeAngleDegrees = 90.0f;
@@ -424,6 +449,7 @@ protected:
 	TArray<FIntPoint> OverwatchPreviewCells;
 
 	bool bIsPlacingOverwatch = false;
+	bool bAlwaysMeleeAttackEnabled = false;
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;

@@ -19,11 +19,15 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Components/SphereComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/Widget.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Components/ChildActorComponent.h"
 
 namespace
 {
@@ -93,13 +97,26 @@ AStrategyUnit::AStrategyUnit()
 	TargetBracketWidget->SetDrawAtDesiredSize(true);
 	TargetBracketWidget->SetVisibility(false);
 	TargetBracketWidget->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
-	
 
+	MeleeWeaponActorComponent = CreateDefaultSubobject<UChildActorComponent>(TEXT("MeleeWeaponActor"));
+	MeleeWeaponActorComponent->SetupAttachment(GetRootComponent());
+}
+
+void AStrategyUnit::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	ConfigureVisualComponentsForTacticalMovement();
+	UpdateMeleeWeaponVisual();
 }
 
 void AStrategyUnit::BeginPlay()
 {
 	Super::BeginPlay();
+
+	ConfigureVisualComponentsForTacticalMovement();
+	UpdateMeleeWeaponVisual();
+
 
 	if (UnitData && UnitData->StatusBarWidgetClass)
 	{
@@ -762,6 +779,187 @@ void AStrategyUnit::StartMeleeAttackMode()
 	else
 	{
 		StrategyPC->ShowTacticalHUD();
+	}
+}
+
+float AStrategyUnit::PlayMeleeAttackMontage()
+{
+	if (!MeleeAttackMontage)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Melee attack montage is not assigned for %s"), *GetName());
+		return 0.0f;
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+
+	USkeletalMeshComponent* CharacterMesh = nullptr;
+	UAnimInstance* AnimInstance = nullptr;
+	const USkeleton* MontageSkeleton = MeleeAttackMontage->GetSkeleton();
+
+	if (!MeleeAttackMontageMeshComponentName.IsNone())
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent && MeshComponent->GetFName() == MeleeAttackMontageMeshComponentName)
+			{
+				CharacterMesh = MeshComponent;
+				AnimInstance = MeshComponent->GetAnimInstance();
+				break;
+			}
+		}
+	}
+
+	for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+	{
+		if (AnimInstance)
+		{
+			break;
+		}
+
+		if (!MeshComponent || !MeshComponent->GetAnimInstance())
+		{
+			continue;
+		}
+
+		const USkeleton* MeshSkeleton = MeshComponent->GetSkeletalMeshAsset()
+			? MeshComponent->GetSkeletalMeshAsset()->GetSkeleton()
+			: nullptr;
+
+		if (!MontageSkeleton || MeshSkeleton == MontageSkeleton)
+		{
+			CharacterMesh = MeshComponent;
+			AnimInstance = MeshComponent->GetAnimInstance();
+			break;
+		}
+	}
+
+	if (!AnimInstance)
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent && MeshComponent->GetAnimInstance())
+			{
+				CharacterMesh = MeshComponent;
+				AnimInstance = MeshComponent->GetAnimInstance();
+				break;
+			}
+		}
+	}
+
+	if (!CharacterMesh || !AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Cannot play melee montage for %s. RequestedMesh=%s Mesh=%s AnimInstance=%s Montage=%s"),
+			*GetName(),
+			*MeleeAttackMontageMeshComponentName.ToString(),
+			*GetNameSafe(GetMesh()),
+			*GetNameSafe(AnimInstance),
+			*GetNameSafe(MeleeAttackMontage));
+		return 0.0f;
+	}
+
+	const USkeleton* MeshSkeleton = CharacterMesh->GetSkeletalMeshAsset()
+		? CharacterMesh->GetSkeletalMeshAsset()->GetSkeleton()
+		: nullptr;
+	if (MeshSkeleton && MontageSkeleton && MeshSkeleton != MontageSkeleton)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Melee montage skeleton mismatch for %s. Mesh=%s MeshSkeleton=%s Montage=%s MontageSkeleton=%s"),
+			*GetName(),
+			*GetNameSafe(CharacterMesh->GetSkeletalMeshAsset()),
+			*GetNameSafe(MeshSkeleton),
+			*GetNameSafe(MeleeAttackMontage),
+			*GetNameSafe(MontageSkeleton));
+		return 0.0f;
+	}
+
+	const float PlayedLength = AnimInstance->Montage_Play(MeleeAttackMontage);
+	if (PlayedLength <= 0.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to play melee attack montage for %s. Mesh=%s AnimInstance=%s Montage=%s MeshSkeleton=%s MontageSkeleton=%s"),
+			*GetName(),
+			*GetNameSafe(CharacterMesh->GetSkeletalMeshAsset()),
+			*GetNameSafe(AnimInstance),
+			*GetNameSafe(MeleeAttackMontage),
+			*GetNameSafe(MeshSkeleton),
+			*GetNameSafe(MontageSkeleton));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Playing melee attack montage %s on %s using mesh %s for %.2f seconds"),
+			*GetNameSafe(MeleeAttackMontage),
+			*GetName(),
+			*GetNameSafe(CharacterMesh),
+			PlayedLength);
+	}
+
+	return PlayedLength;
+}
+
+USkeletalMeshComponent* AStrategyUnit::FindMeleeWeaponAttachMesh() const
+{
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+
+	if (!MeleeWeaponMeshComponentName.IsNone())
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent
+				&& MeshComponent->GetFName() == MeleeWeaponMeshComponentName
+				&& (MeleeWeaponSocketName.IsNone() || MeshComponent->DoesSocketExist(MeleeWeaponSocketName)))
+			{
+				return MeshComponent;
+			}
+		}
+	}
+
+	for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+	{
+		if (MeshComponent && MeshComponent->DoesSocketExist(MeleeWeaponSocketName))
+		{
+			return MeshComponent;
+		}
+	}
+
+	return GetMesh();
+}
+
+void AStrategyUnit::UpdateMeleeWeaponVisual()
+{
+	if (!MeleeWeaponActorComponent)
+	{
+		return;
+	}
+
+	MeleeWeaponActorComponent->SetChildActorClass(MeleeWeaponActorClass);
+
+	USkeletalMeshComponent* AttachMesh = FindMeleeWeaponAttachMesh();
+	if (!AttachMesh)
+	{
+		return;
+	}
+
+	MeleeWeaponActorComponent->AttachToComponent(
+		AttachMesh,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+		MeleeWeaponSocketName);
+}
+
+void AStrategyUnit::ConfigureVisualComponentsForTacticalMovement()
+{
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+
+	TArray<UPrimitiveComponent*> PrimitiveComponents;
+	GetComponents(PrimitiveComponents);
+
+	for (UPrimitiveComponent* Component : PrimitiveComponents)
+	{
+		if (!Component || Component == Capsule)
+		{
+			continue;
+		}
+
+		Component->SetCanEverAffectNavigation(false);
 	}
 }
 

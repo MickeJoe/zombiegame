@@ -81,6 +81,14 @@ void AStrategyGameMode::SetupSpawnPoints()
 			}
 		}
 	}
+
+	auto SortBySpawnOrder = [](const AStrategySpawnPoint& Left, const AStrategySpawnPoint& Right)
+	{
+		return Left.SpawnOrder < Right.SpawnOrder;
+	};
+
+	PlayerSpawns.Sort(SortBySpawnOrder);
+	EnemySpawns.Sort(SortBySpawnOrder);
 }
 
 FTransform AStrategyGameMode::GetProjectedSpawnTransform(
@@ -123,10 +131,33 @@ void AStrategyGameMode::SpawnUnits()
 	Params.SpawnCollisionHandlingOverride =
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	for (AStrategySpawnPoint* Spawn : PlayerSpawns)
+	const int32 PlayerUnitCount = PlayerUnitClasses.Num() > 0
+		? FMath::Min(PlayerSpawns.Num(), PlayerUnitClasses.Num())
+		: PlayerSpawns.Num();
+
+	if (PlayerUnitClasses.Num() > PlayerSpawns.Num())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Only %d of %d configured player unit classes can spawn because there are %d player spawn points"),
+			PlayerUnitCount,
+			PlayerUnitClasses.Num(),
+			PlayerSpawns.Num());
+	}
+
+	for (int32 Index = 0; Index < PlayerUnitCount; ++Index)
+	{
+		AStrategySpawnPoint* Spawn = PlayerSpawns[Index];
+		TSubclassOf<AStrategyUnit> UnitClass = PlayerUnitClasses.Num() > 0
+			? PlayerUnitClasses[Index]
+			: PlayerUnitClass;
+
+		if (!UnitClass)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Player unit spawn skipped: no unit class at index %d"), Index);
+			continue;
+		}
+
 		AStrategyUnit* Unit = GetWorld()->SpawnActor<AStrategyUnit>(
-			PlayerUnitClass,
+			UnitClass,
 			GetProjectedSpawnTransform(Spawn),
 			Params);
 
