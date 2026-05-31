@@ -11,6 +11,7 @@
 #include "StrategyUnit.generated.h"
 
 class UTargetInfoWidget;
+class UTexture2D;
 class AStrategyGameMode;
 class UCameraComponent;
 class AAIStrategySide;
@@ -198,6 +199,8 @@ public:
 	
 	UTargetInfoWidget* GetTargetInfoWidget() const { return TargetInfoWidget; }
 	
+	TArray<AStrategyUnit*> GetEnemiesInRange() const;
+	UTexture2D* GetShootableTargetIconTexture() const { return ShootableTargetIconTexture; }
 	void SetTargetBracketVisible(bool bVisible);
 	void SetTargetInfoVisible(bool bVisible);	
 	void SetTargetingCameraView(EStrategyTargetingCameraView CameraView);
@@ -279,12 +282,14 @@ protected:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<UWidgetComponent> TargetBracketWidget;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI|Targeting")
+	TObjectPtr<UTexture2D> ShootableTargetIconTexture;
 	
 	UPROPERTY()
 	TObjectPtr<UTargetInfoWidget> TargetInfoWidget;
 
 private:
-	TArray<AStrategyUnit*> GetEnemiesInRange() const;
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
 	void UpdateMeleeWeaponVisual();

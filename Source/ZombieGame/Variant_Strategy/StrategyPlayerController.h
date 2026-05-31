@@ -11,6 +11,10 @@
 enum class EPlayerUnitActionType : uint8;
 class SWeaponInfoSlateWidget;
 class SWeaponDebugSlateWidget;
+struct FSlateBrush;
+class UShootableTargetIconBarWidget;
+class UShootableTargetIconWidget;
+class SWidget;
 class UTargetingHUDWidget;
 class UTargetingActionBarWidget;
 class UStrategyTargetingComponent;
@@ -247,6 +251,7 @@ public:
 	void RefreshWeaponInfoPanel();
 	void SuppressSelectionInputBriefly();
 	void RefreshLockedOverwatchHighlights();
+	void ClearShootableTargetIcons();
 
 protected:
 
@@ -267,6 +272,24 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UUnitActionBarWidget> UnitActionBarWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category="UI|Targeting")
+	TSubclassOf<UShootableTargetIconBarWidget> ShootableTargetIconBarWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UShootableTargetIconBarWidget> ShootableTargetIconBarWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category="UI|Targeting")
+	TSubclassOf<UShootableTargetIconWidget> ShootableTargetIconWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	FVector2D ShootableTargetIconBarOffset = FVector2D(0.0f, -158.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	FVector2D ShootableTargetIconSize = FVector2D(34.0f, 34.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	float ShootableTargetIconSpacing = 8.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category="UI")
 	TSubclassOf<UPlayerUnitRosterWidget> PlayerUnitRosterWidgetClass;
@@ -387,6 +410,8 @@ protected:
 	void UpdateMovementPreview();
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
 	void RefreshPlayerUnitRoster();
+	void RefreshShootableTargetIcons();
+	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost);
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
 	void UpdateOverwatchPlacementPreview();
 	void ConfirmOverwatchPlacement();
@@ -484,8 +509,11 @@ private:
 	TArray<AStrategyUnit*> GetWeaponDebugTargetUnits() const;
 	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
 	UStrategyWeaponData* FindDebugWeapon(FName WeaponId) const;
+	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost) const;
 
 	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;
 	TSharedPtr<SWeaponDebugSlateWidget> WeaponDebugSlateWidget;
+	TSharedPtr<SWidget> ShootableTargetIconSlateWidget;
+	TArray<TSharedPtr<FSlateBrush>> ShootableTargetIconBrushes;
 	
 };

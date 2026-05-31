@@ -33,12 +33,19 @@
 
 #include "UI/EndTurnWidget.h"
 #include "UI/PlayerUnitRosterWidget.h"
+#include "UI/ShootableTargetIconBarWidget.h"
+#include "UI/ShootableTargetIconWidget.h"
 #include "UI/UnitActionBarWidget.h"
 #include "UI/WeaponDebugSlateWidget.h"
 #include "UI/WeaponInfoSlateWidget.h"
 #include "UI/TargetingUI//StrategyTargetingComponent.h"
 #include "ZombieGame.h"
+#include "Styling/CoreStyle.h"
+#include "Styling/SlateBrush.h"
+#include "Widgets/Images/SImage.h"
+#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SConstraintCanvas.h"
+#include "Widgets/SBoxPanel.h"
 
 namespace
 {
@@ -705,6 +712,7 @@ void AStrategyPlayerController::DoSelectionCommand()
 	RefreshActionBar();
 	RefreshPlayerUnitRoster();
 	RefreshWeaponInfoPanel();
+	RefreshShootableTargetIcons();
 }
 
 void AStrategyPlayerController::DoSelectAllOnScreenCommand()
@@ -739,10 +747,13 @@ void AStrategyPlayerController::DoSelectAllOnScreenCommand()
 
 	RefreshPlayerUnitRoster();
 	RefreshWeaponInfoPanel();
+	RefreshShootableTargetIcons();
 }
 
 void AStrategyPlayerController::DoDeselectAllCommand()
 {
+	ClearShootableTargetIcons();
+
 	if (HighlightActor)
 	{
 		HighlightActor->ClearReachableHighlights();
@@ -768,6 +779,7 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 	ControlledUnits.Empty();
 	RefreshPlayerUnitRoster();
 	RefreshWeaponInfoPanel();
+	RefreshShootableTargetIcons();
 }
 
 void AStrategyPlayerController::DoDragScrollCommand()
@@ -1203,6 +1215,10 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	{
 		HighlightActor->ClearMovementPath();
 		HighlightActor->ClearCoverIndicators();
+		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
+		{
+			RefreshShootableTargetIcons();
+		}
 		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
 		LastMovementPreviewUnit = nullptr;
 		return;
@@ -1213,6 +1229,10 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	{
 		HighlightActor->ClearMovementPath();
 		HighlightActor->ClearCoverIndicators();
+		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
+		{
+			RefreshShootableTargetIcons();
+		}
 		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
 		LastMovementPreviewUnit = nullptr;
 		return;
@@ -1223,6 +1243,10 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	{
 		HighlightActor->ClearMovementPath();
 		HighlightActor->ClearCoverIndicators();
+		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
+		{
+			RefreshShootableTargetIcons();
+		}
 		LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
 		LastMovementPreviewUnit = nullptr;
 		return;
@@ -1247,6 +1271,10 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	}
 
 	HighlightActor->ShowCoverIndicators(BuildCoverIndicatorsForCell(HoveredCell));
+
+	const FIntPoint UnitCell = GridManager->WorldToGrid(PreviewUnit->GetActorLocation());
+	const int32 MovementActionPointCost = HoveredCell == UnitCell ? 0 : 1;
+	RefreshShootableTargetIconsForCell(PreviewUnit, HoveredCell, MovementActionPointCost);
 }
 
 void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
@@ -1925,6 +1953,7 @@ void AStrategyPlayerController::SelectRosterUnit(AStrategyUnit* Unit)
 	RefreshActionBar();
 	RefreshPlayerUnitRoster();
 	RefreshWeaponInfoPanel();
+	RefreshShootableTargetIcons();
 }
 
 void AStrategyPlayerController::CenterCameraOnUnit(const AStrategyUnit* Unit)
@@ -1952,11 +1981,13 @@ void AStrategyPlayerController::RefreshActionBar()
 		{
 			UnitActionBarWidget->SetActions({});
 		}
+		RefreshShootableTargetIcons();
 		return;
 	}
 	
 	if (!UnitActionBarWidget)
 	{
+		RefreshShootableTargetIcons();
 		return;
 	}
 	
@@ -2026,6 +2057,7 @@ void AStrategyPlayerController::RefreshActionBar()
 
 */
 	UnitActionBarWidget->SetActions(Actions);
+	RefreshShootableTargetIcons();
 	
 }
 
@@ -2052,6 +2084,242 @@ void AStrategyPlayerController::RefreshPlayerUnitRoster()
 
 	const TArray<AStrategyUnit*> AliveUnits = GameMode->GetPlayerSide()->GetAliveUnits();
 	PlayerUnitRosterWidget->SetUnits(AliveUnits, ControlledUnits);
+}
+
+void AStrategyPlayerController::ClearShootableTargetIcons()
+{
+	if (ShootableTargetIconBarWidget)
+	{
+		ShootableTargetIconBarWidget->SetTargets({}, ShootableTargetIconWidgetClass);
+	}
+
+	if (ShootableTargetIconSlateWidget.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(ShootableTargetIconSlateWidget.ToSharedRef());
+	}
+
+	ShootableTargetIconSlateWidget.Reset();
+	ShootableTargetIconBrushes.Reset();
+}
+
+void AStrategyPlayerController::RefreshShootableTargetIcons()
+{
+	ClearShootableTargetIcons();
+
+	if (TargetingComponent && TargetingComponent->IsInFireMode())
+	{
+		return;
+	}
+
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(SelectedUnit) && ControlledUnits.Num() > 0)
+	{
+		SelectedUnit = ControlledUnits[0];
+	}
+
+	if (!IsValid(SelectedUnit)
+		|| !IsSelectableUnit(SelectedUnit)
+		|| SelectedUnit->GetCurrentHealth() <= 0)
+	{
+		return;
+	}
+
+	const FIntPoint SourceCell = GridManager
+		? GridManager->WorldToGrid(SelectedUnit->GetActorLocation())
+		: FIntPoint::ZeroValue;
+	const TArray<AStrategyUnit*> Targets = GetShootableTargetsFromCell(SelectedUnit, SourceCell, 0);
+
+	if (Targets.Num() == 0 || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+
+	TSharedRef<SHorizontalBox> IconRow = SNew(SHorizontalBox);
+
+	for (AStrategyUnit* Target : Targets)
+	{
+		UTexture2D* IconTexture = Target ? Target->GetShootableTargetIconTexture() : nullptr;
+
+		TSharedPtr<FSlateBrush> IconBrush = MakeShared<FSlateBrush>();
+		IconBrush->ImageSize = ShootableTargetIconSize;
+		IconBrush->DrawAs = ESlateBrushDrawType::Image;
+		IconBrush->SetResourceObject(IconTexture);
+		ShootableTargetIconBrushes.Add(IconBrush);
+
+		IconRow->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(FMargin(ShootableTargetIconSpacing * 0.5f, 0.0f))
+		[
+			SNew(SBox)
+			.WidthOverride(ShootableTargetIconSize.X)
+			.HeightOverride(ShootableTargetIconSize.Y)
+			[
+				SNew(SImage)
+				.Image(IconTexture ? IconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+				.ColorAndOpacity(IconTexture ? FLinearColor::White : FLinearColor(1.0f, 0.0f, 0.0f, 0.85f))
+			]
+		];
+	}
+
+	const float BarWidth =
+		Targets.Num() * ShootableTargetIconSize.X
+		+ FMath::Max(Targets.Num() - 1, 0) * ShootableTargetIconSpacing;
+	const float BarHeight = ShootableTargetIconSize.Y;
+
+	ShootableTargetIconSlateWidget =
+		SNew(SConstraintCanvas)
+		+ SConstraintCanvas::Slot()
+		.Anchors(FAnchors(0.5f, 1.0f))
+		.Alignment(FVector2D(0.5f, 1.0f))
+		.Offset(FMargin(
+			ShootableTargetIconBarOffset.X,
+			ShootableTargetIconBarOffset.Y,
+			BarWidth,
+			BarHeight))
+		[
+			IconRow
+		];
+
+	GEngine->GameViewport->AddViewportWidgetContent(ShootableTargetIconSlateWidget.ToSharedRef(), 1210);
+}
+
+void AStrategyPlayerController::RefreshShootableTargetIconsForCell(
+	AStrategyUnit* Unit,
+	const FIntPoint& SourceCell,
+	int32 MovementActionPointCost)
+{
+	ClearShootableTargetIcons();
+
+	if (TargetingComponent && TargetingComponent->IsInFireMode())
+	{
+		return;
+	}
+
+	if (!IsValid(Unit)
+		|| !IsSelectableUnit(Unit)
+		|| Unit->GetCurrentHealth() <= 0)
+	{
+		return;
+	}
+
+	const TArray<AStrategyUnit*> Targets = GetShootableTargetsFromCell(Unit, SourceCell, MovementActionPointCost);
+	if (Targets.Num() == 0 || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+
+	TSharedRef<SHorizontalBox> IconRow = SNew(SHorizontalBox);
+
+	for (AStrategyUnit* Target : Targets)
+	{
+		UTexture2D* IconTexture = Target ? Target->GetShootableTargetIconTexture() : nullptr;
+
+		TSharedPtr<FSlateBrush> IconBrush = MakeShared<FSlateBrush>();
+		IconBrush->ImageSize = ShootableTargetIconSize;
+		IconBrush->DrawAs = ESlateBrushDrawType::Image;
+		IconBrush->SetResourceObject(IconTexture);
+		ShootableTargetIconBrushes.Add(IconBrush);
+
+		IconRow->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(FMargin(ShootableTargetIconSpacing * 0.5f, 0.0f))
+		[
+			SNew(SBox)
+			.WidthOverride(ShootableTargetIconSize.X)
+			.HeightOverride(ShootableTargetIconSize.Y)
+			[
+				SNew(SImage)
+				.Image(IconTexture ? IconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+				.ColorAndOpacity(IconTexture ? FLinearColor::White : FLinearColor(1.0f, 0.0f, 0.0f, 0.85f))
+			]
+		];
+	}
+
+	const float BarWidth =
+		Targets.Num() * ShootableTargetIconSize.X
+		+ FMath::Max(Targets.Num() - 1, 0) * ShootableTargetIconSpacing;
+	const float BarHeight = ShootableTargetIconSize.Y;
+
+	ShootableTargetIconSlateWidget =
+		SNew(SConstraintCanvas)
+		+ SConstraintCanvas::Slot()
+		.Anchors(FAnchors(0.5f, 1.0f))
+		.Alignment(FVector2D(0.5f, 1.0f))
+		.Offset(FMargin(
+			ShootableTargetIconBarOffset.X,
+			ShootableTargetIconBarOffset.Y,
+			BarWidth,
+			BarHeight))
+		[
+			IconRow
+		];
+
+	GEngine->GameViewport->AddViewportWidgetContent(ShootableTargetIconSlateWidget.ToSharedRef(), 1210);
+}
+
+TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
+	AStrategyUnit* Unit,
+	const FIntPoint& SourceCell,
+	int32 MovementActionPointCost) const
+{
+	TArray<AStrategyUnit*> Targets;
+
+	if (!GridManager || !IsValid(Unit))
+	{
+		return Targets;
+	}
+
+	const FStrategyWeaponInstance& FireWeapon = Unit->GetEquippedFireWeapon();
+	const FAttackStats* AttackStats = FireWeapon.GetAttackStats();
+	if (!FireWeapon.WeaponData || !AttackStats)
+	{
+		return Targets;
+	}
+
+	const int32 RemainingActionPointsAfterMove = Unit->GetRemainingActionPoints() - FMath::Max(MovementActionPointCost, 0);
+	if (RemainingActionPointsAfterMove < AttackStats->ActionPointCost)
+	{
+		return Targets;
+	}
+
+	const int32 AmmoCost = FireWeapon.UsesAmmo()
+		? FMath::Max(AttackStats->AmmoCost, 1)
+		: 0;
+	if (FireWeapon.UsesAmmo() && FireWeapon.CurrentAmmo < AmmoCost)
+	{
+		return Targets;
+	}
+
+	AStrategyGameMode* GameMode = GetStrategyGameMode();
+	AAIStrategySide* EnemySide = GameMode ? GameMode->GetEnemySide() : nullptr;
+	if (!EnemySide)
+	{
+		return Targets;
+	}
+
+	for (AStrategyUnit* Target : EnemySide->Units)
+	{
+		if (!IsValid(Target)
+			|| Target->GetCurrentHealth() <= 0
+			|| Target->GetStrategyUnitTeam() != EStrategyUnitTeam::AI)
+		{
+			continue;
+		}
+
+		const FIntPoint TargetCell = GridManager->WorldToGrid(Target->GetActorLocation());
+		const int32 Distance =
+			FMath::Abs(SourceCell.X - TargetCell.X)
+			+ FMath::Abs(SourceCell.Y - TargetCell.Y);
+
+		if (Distance <= AttackStats->Range)
+		{
+			Targets.Add(Target);
+		}
+	}
+
+	return Targets;
 }
 
 AStrategyGameMode* AStrategyPlayerController::GetStrategyGameMode() const
@@ -2121,6 +2389,7 @@ void AStrategyPlayerController::ShowTacticalHUD()
 	RefreshActionBar();
 	RefreshPlayerUnitRoster();
 	RefreshWeaponInfoPanel();
+	RefreshShootableTargetIcons();
 }
 
 void AStrategyPlayerController::RestoreTacticalView(float BlendTime)
@@ -2150,6 +2419,8 @@ void AStrategyPlayerController::RestoreTacticalView(float BlendTime)
 
 void AStrategyPlayerController::ShowTargetingHUD()
 {
+	ClearShootableTargetIcons();
+
 	if (TargetingHUD)
 	{
 		TargetingHUD->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
