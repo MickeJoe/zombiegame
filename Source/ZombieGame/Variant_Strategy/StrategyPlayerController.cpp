@@ -29,6 +29,7 @@
 #include "Data/Weapon/StrategyWeaponDatabase.h"
 #include "Data/Weapon/StrategyWeaponData.h"
 #include "Blueprint/UserWidget.h"
+#include "Systems/AttackHandling/StrategyAttackResolver.h"
 #include "TargetingUI/TargetingHUDWidget.h"
 
 #include "UI/EndTurnWidget.h"
@@ -43,9 +44,11 @@
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateBrush.h"
 #include "Widgets/Images/SImage.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SConstraintCanvas.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 
 namespace
 {
@@ -279,6 +282,8 @@ void AStrategyPlayerController::PlayerTick(float DeltaTime)
 	{
 		UpdateMovementPreview();
 	}
+
+	UpdateShootTargetHoverIndicator();
 }
 
 void AStrategyPlayerController::OnPossess(APawn* InPawn)
@@ -2100,6 +2105,217 @@ void AStrategyPlayerController::ClearShootableTargetIcons()
 
 	ShootableTargetIconSlateWidget.Reset();
 	ShootableTargetIconBrushes.Reset();
+}
+
+void AStrategyPlayerController::ClearShootTargetHoverIndicator()
+{
+	if (ShootTargetHoverSlateWidget.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(ShootTargetHoverSlateWidget.ToSharedRef());
+	}
+
+	ShootTargetHoverSlateWidget.Reset();
+	ShootTargetHoverHitChanceIconBrush.Reset();
+	ShootTargetHoverActionPointIconBrush.Reset();
+	LastShootTargetHoverUnit = nullptr;
+}
+
+AStrategyUnit* AStrategyPlayerController::GetHoveredStrategyUnit()
+{
+	FHitResult OutHit;
+	GetHitResultUnderCursorByChannel(SelectionTraceChannel, true, OutHit);
+
+	if (OutHit.bBlockingHit)
+	{
+		if (AStrategyUnit* HitUnit = GetStrategyUnitFromHit(OutHit))
+		{
+			return HitUnit;
+		}
+	}
+
+	FVector WorldLocation = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ZeroVector;
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY)
+		|| !DeprojectScreenPositionToWorld(MouseX, MouseY, WorldLocation, WorldDirection))
+	{
+		return nullptr;
+	}
+
+	const FVector Start = WorldLocation;
+	const FVector End = Start + WorldDirection * 100000.0f;
+
+	FCollisionObjectQueryParams ObjectParams;
+	ObjectParams.AddObjectTypesToQuery(ECC_Pawn);
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+	QueryParams.AddIgnoredActor(GetPawn());
+	QueryParams.bTraceComplex = false;
+
+	TArray<FHitResult> HitResults;
+	GetWorld()->SweepMultiByObjectType(
+		HitResults,
+		Start,
+		End,
+		FQuat::Identity,
+		ObjectParams,
+		FCollisionShape::MakeSphere(ShootTargetHoverTraceRadius),
+		QueryParams);
+
+	for (const FHitResult& Hit : HitResults)
+	{
+		if (AStrategyUnit* Unit = GetStrategyUnitFromHit(Hit))
+		{
+			return Unit;
+		}
+	}
+
+	return nullptr;
+}
+
+void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
+{
+	if (!GEngine || !GEngine->GameViewport || !GridManager)
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	if (TargetingComponent && TargetingComponent->IsInFireMode())
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(SelectedUnit) && ControlledUnits.Num() > 0)
+	{
+		SelectedUnit = ControlledUnits[0];
+	}
+
+	AStrategyUnit* HoveredUnit = GetHoveredStrategyUnit();
+	if (!IsValid(SelectedUnit)
+		|| !IsSelectableUnit(SelectedUnit)
+		|| SelectedUnit->GetCurrentHealth() <= 0
+		|| !IsValid(HoveredUnit)
+		|| HoveredUnit->GetCurrentHealth() <= 0
+		|| HoveredUnit->GetStrategyUnitTeam() != EStrategyUnitTeam::AI)
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	const FIntPoint SourceCell = GridManager->WorldToGrid(SelectedUnit->GetActorLocation());
+	const TArray<AStrategyUnit*> ShootableTargets = GetShootableTargetsFromCell(SelectedUnit, SourceCell, 0);
+	if (!ShootableTargets.Contains(HoveredUnit))
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(SelectedUnit, HoveredUnit);
+	if (!Context.AttackStats)
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	const int32 HitChance = UStrategyAttackResolver::CalculateHitChance(Context);
+	const int32 RemainingActionPointsAfterShot =
+		FMath::Max(SelectedUnit->GetRemainingActionPoints() - Context.AttackStats->ActionPointCost, 0);
+
+	FVector2D ScreenPos;
+	if (!UGameplayStatics::ProjectWorldToScreen(this, HoveredUnit->GetActorLocation(), ScreenPos))
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
+	ShootTargetHoverHitChanceIconBrush = MakeShared<FSlateBrush>();
+	ShootTargetHoverHitChanceIconBrush->ImageSize = ShootTargetHoverIconSize;
+	ShootTargetHoverHitChanceIconBrush->DrawAs = ESlateBrushDrawType::Image;
+	ShootTargetHoverHitChanceIconBrush->SetResourceObject(ShootTargetHoverHitChanceIcon);
+
+	ShootTargetHoverActionPointIconBrush = MakeShared<FSlateBrush>();
+	ShootTargetHoverActionPointIconBrush->ImageSize = ShootTargetHoverIconSize;
+	ShootTargetHoverActionPointIconBrush->DrawAs = ESlateBrushDrawType::Image;
+	ShootTargetHoverActionPointIconBrush->SetResourceObject(ShootTargetHoverActionPointIcon);
+
+	const FString HitText = FString::Printf(TEXT("%d%%"), HitChance);
+	const FString ActionPointText = FString::Printf(TEXT("%d"), RemainingActionPointsAfterShot);
+	const float WidgetWidth = 116.0f;
+	const float WidgetHeight = 30.0f;
+
+	if (ShootTargetHoverSlateWidget.IsValid())
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(ShootTargetHoverSlateWidget.ToSharedRef());
+	}
+
+	ShootTargetHoverSlateWidget =
+		SNew(SConstraintCanvas)
+		+ SConstraintCanvas::Slot()
+		.Anchors(FAnchors(0.0f, 0.0f))
+		.Alignment(FVector2D(0.5f, 1.0f))
+		.Offset(FMargin(ScreenPos.X, ScreenPos.Y - 92.0f, WidgetWidth, WidgetHeight))
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(0.0f, 0.0f, 4.0f, 0.0f))
+			[
+				SNew(SBox)
+				.WidthOverride(ShootTargetHoverIconSize.X)
+				.HeightOverride(ShootTargetHoverIconSize.Y)
+				[
+					SNew(SImage)
+					.Image(ShootTargetHoverHitChanceIcon ? ShootTargetHoverHitChanceIconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("Icons.Warning")))
+					.ColorAndOpacity(ShootTargetHoverHitChanceIcon ? FLinearColor::White : FLinearColor(0.95f, 0.2f, 0.15f, 1.0f))
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(0.0f, 0.0f, 10.0f, 0.0f))
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(HitText))
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.95f, 0.95f, 0.9f, 1.0f)))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+				.ShadowOffset(FVector2D(1.0f, 1.0f))
+				.ShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(FMargin(0.0f, 0.0f, 4.0f, 0.0f))
+			[
+				SNew(SBox)
+				.WidthOverride(ShootTargetHoverIconSize.X)
+				.HeightOverride(ShootTargetHoverIconSize.Y)
+				[
+					SNew(SImage)
+					.Image(ShootTargetHoverActionPointIcon ? ShootTargetHoverActionPointIconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("Icons.Warning")))
+					.ColorAndOpacity(ShootTargetHoverActionPointIcon ? FLinearColor::White : FLinearColor(0.95f, 0.2f, 0.15f, 1.0f))
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(ActionPointText))
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.45f, 0.95f, 0.3f, 1.0f)))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+				.ShadowOffset(FVector2D(1.0f, 1.0f))
+				.ShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f))
+			]
+		];
+
+	GEngine->GameViewport->AddViewportWidgetContent(ShootTargetHoverSlateWidget.ToSharedRef(), 1220);
+	LastShootTargetHoverUnit = HoveredUnit;
 }
 
 void AStrategyPlayerController::RefreshShootableTargetIcons()

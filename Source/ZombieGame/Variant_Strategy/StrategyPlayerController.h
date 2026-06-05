@@ -20,6 +20,7 @@ class UTargetingActionBarWidget;
 class UStrategyTargetingComponent;
 class UStrategyWeaponData;
 class UStrategyWeaponDatabase;
+class UTexture2D;
 class UPlayerUnitRosterWidget;
 class AStrategyGameMode;
 class AStrategyUnit;
@@ -135,6 +136,9 @@ protected:
 	/** Max distance to look for nearby units when doing a click or touch interaction */
 	UPROPERTY(EditAnywhere, Category="Input", meta = (ClampMin = 0, ClampMax = 10000, Units = "cm"))
 	float InteractionRadius = 250.0f;
+
+	UPROPERTY(EditAnywhere, Category="Input", meta = (ClampMin = 0, ClampMax = 500, Units = "cm"))
+	float ShootTargetHoverTraceRadius = 45.0f;
 
 	/** Max distance between the starting and current position of the second touch finger to be considered a box selection */
 	UPROPERTY(EditAnywhere, Category="Input", meta = (ClampMin = 0, ClampMax = 10000))
@@ -252,6 +256,7 @@ public:
 	void SuppressSelectionInputBriefly();
 	void RefreshLockedOverwatchHighlights();
 	void ClearShootableTargetIcons();
+	void ClearShootTargetHoverIndicator();
 
 protected:
 
@@ -290,6 +295,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
 	float ShootableTargetIconSpacing = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	TObjectPtr<UTexture2D> ShootTargetHoverHitChanceIcon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	TObjectPtr<UTexture2D> ShootTargetHoverActionPointIcon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI|Targeting")
+	FVector2D ShootTargetHoverIconSize = FVector2D(24.0f, 24.0f);
 
 	UPROPERTY(EditDefaultsOnly, Category="UI")
 	TSubclassOf<UPlayerUnitRosterWidget> PlayerUnitRosterWidgetClass;
@@ -412,6 +426,7 @@ protected:
 	void RefreshPlayerUnitRoster();
 	void RefreshShootableTargetIcons();
 	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost);
+	void UpdateShootTargetHoverIndicator();
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
 	void UpdateOverwatchPlacementPreview();
 	void ConfirmOverwatchPlacement();
@@ -510,10 +525,15 @@ private:
 	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
 	UStrategyWeaponData* FindDebugWeapon(FName WeaponId) const;
 	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost) const;
+	AStrategyUnit* GetHoveredStrategyUnit();
 
 	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;
 	TSharedPtr<SWeaponDebugSlateWidget> WeaponDebugSlateWidget;
 	TSharedPtr<SWidget> ShootableTargetIconSlateWidget;
 	TArray<TSharedPtr<FSlateBrush>> ShootableTargetIconBrushes;
+	TSharedPtr<SWidget> ShootTargetHoverSlateWidget;
+	TSharedPtr<FSlateBrush> ShootTargetHoverHitChanceIconBrush;
+	TSharedPtr<FSlateBrush> ShootTargetHoverActionPointIconBrush;
+	TObjectPtr<AStrategyUnit> LastShootTargetHoverUnit = nullptr;
 	
 };
