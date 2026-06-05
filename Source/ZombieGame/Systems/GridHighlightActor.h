@@ -11,6 +11,7 @@ class UDecalComponent;
 class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
+class UTextRenderComponent;
 class UTexture2D;
 class AGridManager;
 
@@ -93,6 +94,24 @@ public:
 	UPROPERTY(EditAnywhere, Category="Highlight|Movement Path")
 	float MovementPathLineHeightOffset = 10.0f;
 
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
+	FLinearColor MovementDestinationLineColor = FLinearColor(1.0f, 0.88f, 0.12f, 1.0f);
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination", meta=(ClampMin="0.0"))
+	float MovementDestinationLineThickness = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
+	float MovementDestinationLineHeightOffset = 18.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
+	FLinearColor MovementDestinationTextColor = FLinearColor(1.0f, 0.0f, 0.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination", meta=(ClampMin="1.0"))
+	float MovementDestinationTextWorldSize = 58.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
+	float MovementDestinationTextHeightOffset = 34.0f;
+
 	UPROPERTY(EditAnywhere, Category="Highlight|Cover")
 	TObjectPtr<UTexture2D> HalfCoverTexture;
 
@@ -144,6 +163,8 @@ public:
 	void ClearOverwatchPreviewBoundaryLines();
 	void ShowMovementPath(const TArray<FVector>& PathPoints);
 	void ClearMovementPath();
+	void ShowMovementDestination(AGridManager* GridManager, const FIntPoint& Cell, int32 RemainingTimeUnits);
+	void ClearMovementDestination();
 	void ShowCoverIndicators(const TArray<FGridCoverIndicator>& Indicators);
 	void ClearCoverIndicators();
 
@@ -165,6 +186,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<ULineBatchComponent> MovementPathLineBatch;
+
+	UPROPERTY()
+	TObjectPtr<ULineBatchComponent> MovementDestinationLineBatch;
+
+	UPROPERTY()
+	TObjectPtr<UTextRenderComponent> MovementDestinationText;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> CoverIndicatorPool;

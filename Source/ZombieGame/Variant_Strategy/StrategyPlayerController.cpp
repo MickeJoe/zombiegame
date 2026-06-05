@@ -443,6 +443,32 @@ void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 */
 	if (GetLocationUnderCursor(CachedSelection))
 	{
+		CachedInteraction = CachedSelection;
+
+		if (!GetHoveredStrategyUnit() && ControlledUnits.Num() > 0 && GridManager)
+		{
+			const FIntPoint ClickedCell = GridManager->WorldToGrid(CachedInteraction);
+			AStrategyUnit* MoveUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+			if (IsValid(MoveUnit) && ReachableCells.Contains(ClickedCell))
+			{
+				int32 MoveCost = 0;
+				if (GridManager->TryGetMoveCostCells(MoveUnit, ClickedCell, MoveCost)
+					&& MoveCost <= MoveUnit->GetRemainingTimeUnits())
+				{
+					if (HighlightActor)
+					{
+						HighlightActor->ShowMovementDestination(
+							GridManager,
+							ClickedCell,
+							MoveUnit->GetRemainingTimeUnits() - MoveCost);
+					}
+
+					DoMoveUnitsCommand();
+					return;
+				}
+			}
+		}
+
 		DoSelectionCommand();
 	}
 }
@@ -487,24 +513,7 @@ void AStrategyPlayerController::InteractClickCompleted(const FInputActionValue& 
 		return;
 	}
 
-	// do we have any units in the control list and a valid interaction location under the cursor?
-	if (ControlledUnits.Num() > 0 && GetLocationUnderCursor(CachedInteraction))
-	{
-		// is double tap select all active?
-		if (bDoubleTapActive)
-		{
-			// release double tap select all
-			bDoubleTapActive = false;
-
-		}
-		else
-		{
-
-			// move the selected units to the target location
-			DoMoveUnitsCommand();
-
-		}
-	}
+	bDoubleTapActive = false;
 }
 
 void AStrategyPlayerController::TouchPrimaryHoldStarted(const FInputActionValue& Value)
@@ -763,6 +772,7 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 	{
 		HighlightActor->ClearReachableHighlights();
 		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
 	}
 	LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
@@ -1217,6 +1227,10 @@ void AStrategyPlayerController::UpdateMovementPreview()
 {
 	if (!GridManager || !HighlightActor || ReachableCells.Num() == 0)
 	{
+		if (HighlightActor)
+		{
+			HighlightActor->ClearMovementDestination();
+		}
 		return;
 	}
 
@@ -1224,6 +1238,7 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	if (!IsValid(PreviewUnit) || !IsSelectableUnit(PreviewUnit) || PreviewUnit->GetRemainingTimeUnits() < 1)
 	{
 		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
 		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
 		{
@@ -1238,6 +1253,7 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	if (!GetLocationUnderCursor(CursorLocation))
 	{
 		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
 		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
 		{
@@ -1252,6 +1268,7 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	if (!ReachableCells.Contains(HoveredCell))
 	{
 		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
 		if (LastMovementPreviewCell != FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min()))
 		{
@@ -1288,6 +1305,12 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	{
 		GridManager->TryGetMoveCostCells(PreviewUnit, HoveredCell, MovementTimeUnitCost);
 	}
+
+	HighlightActor->ShowMovementDestination(
+		GridManager,
+		HoveredCell,
+		PreviewUnit->GetRemainingTimeUnits() - MovementTimeUnitCost);
+
 	RefreshShootableTargetIconsForCell(PreviewUnit, HoveredCell, MovementTimeUnitCost);
 }
 
@@ -1324,6 +1347,7 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 	{
 		HighlightActor->ClearReachableHighlights();
 		HighlightActor->ClearMovementPath();
+		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
 	}
 

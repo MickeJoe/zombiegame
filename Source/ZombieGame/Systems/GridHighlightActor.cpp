@@ -4,8 +4,11 @@
 #include "Components/DecalComponent.h"
 #include "Components/LineBatchComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/TextRenderComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GridManager.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 #include "ZombieGame.h"
 
@@ -49,6 +52,18 @@ AGridHighlightActor::AGridHighlightActor()
 
 	MovementPathLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("MovementPathLines"));
 	MovementPathLineBatch->SetupAttachment(RootComponent);
+
+	MovementDestinationLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("MovementDestinationLines"));
+	MovementDestinationLineBatch->SetupAttachment(RootComponent);
+
+	MovementDestinationText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("MovementDestinationText"));
+	MovementDestinationText->SetupAttachment(RootComponent);
+	MovementDestinationText->SetHorizontalAlignment(EHTA_Center);
+	MovementDestinationText->SetVerticalAlignment(EVRTA_TextCenter);
+	MovementDestinationText->SetWorldSize(MovementDestinationTextWorldSize);
+	MovementDestinationText->SetTextRenderColor(MovementDestinationTextColor.ToFColor(true));
+	MovementDestinationText->SetHiddenInGame(true);
+	MovementDestinationText->SetVisibility(false);
 }
 
 UDecalComponent* AGridHighlightActor::GetOrCreateDecal(
@@ -229,6 +244,83 @@ void AGridHighlightActor::ShowMovementPath(const TArray<FVector>& PathPoints)
 void AGridHighlightActor::ClearMovementPath()
 {
 	ClearBoundaryLines(MovementPathLineBatch);
+}
+
+void AGridHighlightActor::ShowMovementDestination(
+	AGridManager* GridManager,
+	const FIntPoint& Cell,
+	int32 RemainingTimeUnits)
+{
+	ClearMovementDestination();
+
+	if (!GridManager || !MovementDestinationLineBatch || !MovementDestinationText)
+	{
+		return;
+	}
+
+	FVector GroundLocation = GridManager->GridToWorld(Cell);
+	FVector NavigationLocation;
+	if (!GridManager->TryGetNavigationLocationForCell(Cell, GroundLocation))
+	{
+		NavigationLocation = GroundLocation;
+	}
+	else
+	{
+		NavigationLocation = GroundLocation;
+		GroundLocation = GridManager->GridToWorld(Cell);
+		GroundLocation.Z = NavigationLocation.Z;
+	}
+
+	const float HalfSize = GridManager->CellSize * 0.5f;
+	const FVector Center = GroundLocation + FVector(0.0f, 0.0f, MovementDestinationLineHeightOffset);
+	const FVector Corners[] =
+	{
+		Center + FVector(-HalfSize, -HalfSize, 0.0f),
+		Center + FVector(HalfSize, -HalfSize, 0.0f),
+		Center + FVector(HalfSize, HalfSize, 0.0f),
+		Center + FVector(-HalfSize, HalfSize, 0.0f)
+	};
+
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		MovementDestinationLineBatch->DrawLine(
+			Corners[Index],
+			Corners[(Index + 1) % 4],
+			MovementDestinationLineColor,
+			0,
+			MovementDestinationLineThickness);
+	}
+
+	MovementDestinationText->SetWorldLocation(
+		GroundLocation + FVector(0.0f, 0.0f, MovementDestinationTextHeightOffset));
+	if (const APlayerCameraManager* CameraManager = UGameplayStatics::GetPlayerCameraManager(this, 0))
+	{
+		const FVector TextLocation = MovementDestinationText->GetComponentLocation();
+		const FVector CameraLocation = CameraManager->GetCameraLocation();
+		MovementDestinationText->SetWorldRotation((CameraLocation - TextLocation).Rotation());
+	}
+	else
+	{
+		MovementDestinationText->SetWorldRotation(FRotator(90.0f, 0.0f, 0.0f));
+	}
+	MovementDestinationText->SetWorldSize(MovementDestinationTextWorldSize);
+	MovementDestinationText->SetTextRenderColor(MovementDestinationTextColor.ToFColor(true));
+	MovementDestinationText->SetText(FText::Format(
+		NSLOCTEXT("GridHighlight", "MovementDestinationTimeUnits", "{0}"),
+		FText::AsNumber(FMath::Max(RemainingTimeUnits, 0))));
+	MovementDestinationText->SetHiddenInGame(false);
+	MovementDestinationText->SetVisibility(true);
+}
+
+void AGridHighlightActor::ClearMovementDestination()
+{
+	ClearBoundaryLines(MovementDestinationLineBatch);
+
+	if (MovementDestinationText)
+	{
+		MovementDestinationText->SetVisibility(false);
+		MovementDestinationText->SetHiddenInGame(true);
+	}
 }
 
 void AGridHighlightActor::ShowCoverIndicators(const TArray<FGridCoverIndicator>& Indicators)

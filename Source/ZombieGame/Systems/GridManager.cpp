@@ -349,25 +349,10 @@ bool AGridManager::TryGetMoveCostCells(
     }
 
     // 🔵 2. Sen: kolla längd
-    FVector::FReal PathLength = 0.0;
-    const auto Result = NavSys->GetPathLength(
-        Start,
-        ProjectedEnd.Location,
-        PathLength,
-        NavData
-    );
-
-    if (Result != ENavigationQueryResult::Success)
-    {
-        return false;
-    }
-
-    if (CellSize <= 0.0f)
-    {
-        return false;
-    }
-
-    OutMoveCostCells = FMath::Max(FMath::CeilToInt(PathLength / CellSize), 0);
+    const FIntPoint StartCell = WorldToGrid(Start);
+    OutMoveCostCells =
+        FMath::Abs(StartCell.X - Cell.X)
+        + FMath::Abs(StartCell.Y - Cell.Y);
     return true;
 }
 
