@@ -27,7 +27,7 @@ struct FEnemyActionCandidate
 	TObjectPtr<AStrategyUnit> TargetUnit = nullptr;
 	int32 DistanceToTargetAfterMove = 0;
 	float Score = 0.f;
-	int32 ActionPointCost = 1;
+	int32 TimeUnitCost = 1;
 };
 
 struct FEnemyAIWeights

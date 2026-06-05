@@ -54,7 +54,7 @@ struct FAttackStats
 	int32 AmmoCost = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	int32 ActionPointCost = 1;
+	int32 TimeUnitCost = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bRequiresLineOfSight = true;

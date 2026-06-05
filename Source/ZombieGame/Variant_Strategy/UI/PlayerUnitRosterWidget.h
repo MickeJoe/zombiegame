@@ -34,10 +34,10 @@ struct FPlayerUnitRosterEntry
 	int32 MaxHealth = 0;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 CurrentActionPoints = 0;
+	int32 CurrentTimeUnits = 0;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 MaxActionPoints = 0;
+	int32 MaxTimeUnits = 0;
 
 	UPROPERTY(BlueprintReadOnly)
 	bool bSelected = false;

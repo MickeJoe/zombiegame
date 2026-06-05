@@ -31,7 +31,7 @@
 
 namespace
 {
-	constexpr int32 DefaultMaxActionPoints = 2;
+	constexpr int32 DefaultMaxTimeUnits = 15;
 	constexpr int32 DefaultMaxMovement = 8;
 	constexpr int32 DefaultSightRange = 28;
 	constexpr int32 DefaultMaxHealth = 8;
@@ -292,20 +292,35 @@ EStrategyUnitTeam AStrategyUnit::GetStrategyUnitTeam() const
 	return StrategyUnitTeam;
 }
 
+void AStrategyUnit::SpendTimeUnits(int32 TimeUnits)
+{
+	UsedTimeUnits = FMath::Clamp(UsedTimeUnits + FMath::Max(TimeUnits, 0), 0, GetMaxTimeUnits());
+}
+
+void AStrategyUnit::ResetTimeUnits()
+{
+	UsedTimeUnits = 0;
+	ClearOverwatch();
+}
+
+int32 AStrategyUnit::GetRemainingTimeUnits() const
+{
+	return FMath::Max(GetMaxTimeUnits() - UsedTimeUnits, 0);
+}
+
 void AStrategyUnit::UseAtionPoints(int32 ActionPoints)
 {
-	UsedActionPoints += ActionPoints;
+	SpendTimeUnits(ActionPoints);
 }
 
 void AStrategyUnit::ResetActionPoints()
 {
-	UsedActionPoints = 0;
-	ClearOverwatch();
+	ResetTimeUnits();
 }
 
 int32 AStrategyUnit::GetRemainingActionPoints() const
 {
-	return GetMaxActionPoints() - UsedActionPoints;	
+	return GetRemainingTimeUnits();
 }
 
 int32 AStrategyUnit::GetSightRange() const
@@ -320,7 +335,12 @@ int32 AStrategyUnit::GetMaxMovement() const
 
 int32 AStrategyUnit::GetMaxActionPoints() const
 {
-	return UnitData ? UnitData->MaxActionPoints : DefaultMaxActionPoints;
+	return GetMaxTimeUnits();
+}
+
+int32 AStrategyUnit::GetMaxTimeUnits() const
+{
+	return UnitData ? UnitData->MaxTimeUnits : DefaultMaxTimeUnits;
 }
 
 int32 AStrategyUnit::GetMaxHealth() const
@@ -469,7 +489,7 @@ void AStrategyUnit::ScheduleDeathRemoval(float DelaySeconds)
 
 bool AStrategyUnit::CanMeleeAttack(AAIStrategySide* EnemySide) const
 {
-	if (!GridManager || !EnemySide || GetRemainingActionPoints() <= 0)
+	if (!GridManager || !EnemySide || GetRemainingTimeUnits() <= 0)
 	{
 		return false;
 	}
@@ -480,7 +500,7 @@ bool AStrategyUnit::CanMeleeAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (GetRemainingActionPoints() < AttackStats->ActionPointCost)
+	if (GetRemainingTimeUnits() < AttackStats->TimeUnitCost)
 	{
 		return false;
 	}
@@ -515,8 +535,7 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	// 1. AP check
-	if (GetRemainingActionPoints() <= 0)
+	if (GetRemainingTimeUnits() <= 0)
 	{
 		return false;
 	}
@@ -535,7 +554,7 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (GetRemainingActionPoints() < AttackStats->ActionPointCost)
+	if (GetRemainingTimeUnits() < AttackStats->TimeUnitCost)
 	{
 		return false;
 	}
@@ -581,7 +600,7 @@ void AStrategyUnit::SpendMeleeAttackResources()
 		return;
 	}
 
-	UseAtionPoints(AttackStats->ActionPointCost);
+	SpendTimeUnits(AttackStats->TimeUnitCost);
 }
 
 void AStrategyUnit::SpendWeaponAttackResources()
@@ -607,7 +626,7 @@ void AStrategyUnit::SpendWeaponAttackResources()
 		return;
 	}
 
-	UseAtionPoints(AttackStats->ActionPointCost);
+	SpendTimeUnits(AttackStats->TimeUnitCost);
 
 	if (FireWeapon->UsesAmmo())
 	{
@@ -621,7 +640,7 @@ bool AStrategyUnit::CanReload() const
 	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
 	return FireWeapon.UsesAmmo()
 		&& FireWeapon.CurrentAmmo < FireWeapon.GetMaxAmmo()
-		&& GetRemainingActionPoints() >= 1;
+		&& GetRemainingTimeUnits() >= 1;
 }
 
 void AStrategyUnit::ReloadWeapon()
@@ -631,7 +650,7 @@ void AStrategyUnit::ReloadWeapon()
 		return;
 	}
 
-	UseAtionPoints(1);
+	SpendTimeUnits(1);
 
 	FStrategyWeaponInstance* FireWeapon = nullptr;
 	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
@@ -652,7 +671,7 @@ void AStrategyUnit::ReloadWeapon()
 bool AStrategyUnit::CanOverwatch() const
 {
 	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
-	return GetRemainingActionPoints() > 0
+	return GetRemainingTimeUnits() > 0
 		&& FireWeapon.WeaponData
 		&& FireWeapon.GetAttackStats();
 }
@@ -703,7 +722,7 @@ void AStrategyUnit::EnterOverwatch(
 	OverwatchAngleDegrees = AngleDegrees;
 	OverwatchCells = Cells;
 
-	UseAtionPoints(GetRemainingActionPoints());
+	SpendTimeUnits(GetRemainingTimeUnits());
 }
 
 void AStrategyUnit::ClearOverwatch()

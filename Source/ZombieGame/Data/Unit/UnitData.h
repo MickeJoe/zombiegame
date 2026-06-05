@@ -21,7 +21,7 @@ public:
 	TObjectPtr<UTexture2D> Icon;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Stats")
-	int32 MaxActionPoints = 2;
+	int32 MaxTimeUnits = 15;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Stats")
 	int32 MaxMovement = 8;

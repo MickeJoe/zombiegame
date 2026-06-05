@@ -86,6 +86,12 @@ public:
 		int32 MaxMoveCells
 	) const;
 
+	bool TryGetMoveCostCells(
+		const AStrategyUnit* Unit,
+		const FIntPoint& Cell,
+		int32& OutMoveCostCells
+	) const;
+
 	void GetCellsInRange(
 		const FIntPoint& CenterCell,
 		int32 Range,

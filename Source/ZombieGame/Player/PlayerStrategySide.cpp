@@ -16,7 +16,7 @@ void APlayerStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* Sig
 
 	for (TObjectPtr<AStrategyUnit> UnitPtr : Units)
 	{
-		UnitPtr->ResetActionPoints();
+		UnitPtr->ResetTimeUnits();
 	}
 
 	if (AStrategyPlayerController* PC = GetWorld()->GetFirstPlayerController<AStrategyPlayerController>())

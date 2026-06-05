@@ -38,7 +38,7 @@ void AAIStrategySide::StartNextEnemyUnitTurn()
 			continue;
 		}
 
-		Unit->ResetActionPoints();
+		Unit->ResetTimeUnits();
 
 		Unit->GetEnemyAI()->TakeTurn(
 			Unit,

@@ -111,8 +111,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetCurrentHealth() const { return CurrentHealth; }
 
-	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	UFUNCTION(BlueprintPure, Category = "Unit Stats", meta=(DeprecatedFunction, DeprecationMessage="Use GetMaxTimeUnits instead."))
 	int32 GetMaxActionPoints() const;
+
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetMaxTimeUnits() const;
 
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetMaxHealth() const;
@@ -185,6 +188,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Unit Data")
 	TObjectPtr<UUnitData> UnitData;
 
+	void SpendTimeUnits(int32 TimeUnits);
+	int32 GetRemainingTimeUnits() const;
+	void ResetTimeUnits();
+
 	void UseAtionPoints(int32 ActionPoints);
 	int32 GetRemainingActionPoints() const;
 	void ResetActionPoints();
@@ -239,7 +246,7 @@ protected:
 	UPROPERTY(Transient)
 	FStrategyWeaponInstance EmptyWeaponInstance;
 	
-	int32 UsedActionPoints = 0;
+	int32 UsedTimeUnits = 0;
 	int32 CurrentHealth = 0;
 	int32 CurrentArmor = 0;
 

@@ -852,7 +852,7 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 	{
 		if (IsValid(CurrentUnit))
 		{
-			if (CurrentUnit->GetRemainingActionPoints() < 1)
+			if (CurrentUnit->GetRemainingTimeUnits() < 1)
 			{
 				continue;
 			}
@@ -863,6 +863,13 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			FIntPoint ClickedCell = GridManager->WorldToGrid(CurrentMoveGoal);
 
 			if (!ReachableCells.Contains(ClickedCell))
+			{
+				return;
+			}
+
+			int32 MoveCost = 0;
+			if (!GridManager->TryGetMoveCostCells(CurrentUnit, ClickedCell, MoveCost)
+				|| MoveCost > CurrentUnit->GetRemainingTimeUnits())
 			{
 				return;
 			}
@@ -908,8 +915,7 @@ void AStrategyPlayerController::DoMoveUnitsCommand()
 			}
 			else
 			{
-				const int32 MoveCost = 1;
-				CurrentUnit->UseAtionPoints(MoveCost);
+				CurrentUnit->SpendTimeUnits(MoveCost);
 				RefreshPlayerUnitRoster();
 			}
 		}
@@ -1167,7 +1173,7 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	}
 
 	AStrategyUnit* HighlightUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
-	if (!IsValid(HighlightUnit) || !IsSelectableUnit(HighlightUnit) || HighlightUnit->GetRemainingActionPoints() < 1)
+	if (!IsValid(HighlightUnit) || !IsSelectableUnit(HighlightUnit) || HighlightUnit->GetRemainingTimeUnits() < 1)
 	{
 		ReachableCells.Empty();
 		HighlightActor->ClearReachableHighlights();
@@ -1181,8 +1187,7 @@ void AStrategyPlayerController::UpdateMovementHighlights()
 	
 	const FIntPoint UnitCell = GridManager->WorldToGrid(HighlightUnit->GetActorLocation());
 
-	// Exempel: enkel diamond range, byt senare mot riktig pathfinding-cost
-	const int32 MaxMove = HighlightUnit->GetMaxMovement();
+	const int32 MaxMove = HighlightUnit->GetRemainingTimeUnits();
 
 	for (int32 Y = -MaxMove; Y <= MaxMove; ++Y)
 	{
@@ -1216,7 +1221,7 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	}
 
 	AStrategyUnit* PreviewUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
-	if (!IsValid(PreviewUnit) || !IsSelectableUnit(PreviewUnit) || PreviewUnit->GetRemainingActionPoints() < 1)
+	if (!IsValid(PreviewUnit) || !IsSelectableUnit(PreviewUnit) || PreviewUnit->GetRemainingTimeUnits() < 1)
 	{
 		HighlightActor->ClearMovementPath();
 		HighlightActor->ClearCoverIndicators();
@@ -1278,8 +1283,12 @@ void AStrategyPlayerController::UpdateMovementPreview()
 	HighlightActor->ShowCoverIndicators(BuildCoverIndicatorsForCell(HoveredCell));
 
 	const FIntPoint UnitCell = GridManager->WorldToGrid(PreviewUnit->GetActorLocation());
-	const int32 MovementActionPointCost = HoveredCell == UnitCell ? 0 : 1;
-	RefreshShootableTargetIconsForCell(PreviewUnit, HoveredCell, MovementActionPointCost);
+	int32 MovementTimeUnitCost = 0;
+	if (HoveredCell != UnitCell)
+	{
+		GridManager->TryGetMoveCostCells(PreviewUnit, HoveredCell, MovementTimeUnitCost);
+	}
+	RefreshShootableTargetIconsForCell(PreviewUnit, HoveredCell, MovementTimeUnitCost);
 }
 
 void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
@@ -1298,9 +1307,9 @@ void AStrategyPlayerController::BeginOverwatchPlacement(AStrategyUnit* Unit)
 
 	if (IsStrategyPlayerOverwatchDebugEnabled())
 	{
-		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement Unit=%s AP=%d Range=%d HighlightActor=%s Grid=%s ConeAngle=%.1f"),
+		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: BeginOverwatchPlacement Unit=%s TU=%d Range=%d HighlightActor=%s Grid=%s ConeAngle=%.1f"),
 			*GetNameSafe(Unit),
-			Unit->GetRemainingActionPoints(),
+			Unit->GetRemainingTimeUnits(),
 			Unit->GetOverwatchRange(),
 			*GetNameSafe(HighlightActor),
 			*GetNameSafe(GridManager),
@@ -1407,7 +1416,7 @@ void AStrategyPlayerController::ConfirmOverwatchPlacement()
 	{
 		UE_LOG(LogZombieGame, Warning, TEXT("OverwatchDebug: Confirm Unit=%s APBefore=%d Aim=%s Direction=%s Cells=%d Range=%d"),
 			*GetNameSafe(OverwatchPlacementUnit),
-			OverwatchPlacementUnit->GetRemainingActionPoints(),
+			OverwatchPlacementUnit->GetRemainingTimeUnits(),
 			*AimLocation.ToCompactString(),
 			*OverwatchPlacementDirection.ToCompactString(),
 			OverwatchPreviewCells.Num(),
@@ -1924,7 +1933,7 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 		break;
 
 	case EPlayerUnitActionType::SkipTurn:
-		SelectedUnit->UseAtionPoints(SelectedUnit->GetRemainingActionPoints());
+		SelectedUnit->SpendTimeUnits(SelectedUnit->GetRemainingTimeUnits());
 		RefreshActionBar();
 		RefreshPlayerUnitRoster();
 		RefreshWeaponInfoPanel();
@@ -2015,7 +2024,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Melee"),
 		nullptr,
 		bAlwaysMeleeAttackEnabled || SelectedUnit->CanMeleeAttack(EnemySide),
-		FText::FromString("No AP or no target")
+		FText::FromString("No TU or no target")
 	});
 	
 	
@@ -2024,7 +2033,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Fire"),
 		nullptr,
 		SelectedUnit->CanWeaponAttack(EnemySide),
-		FText::FromString("No ammo or no AP")
+		FText::FromString("No ammo or no TU")
 	});
 	
 	Actions.Add({
@@ -2032,7 +2041,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Reload"),
 		nullptr,
 		SelectedUnit->CanReload(),
-		FText::FromString("Weapon is full or no AP")
+		FText::FromString("Weapon is full or no TU")
 	});
 
 	Actions.Add({
@@ -2040,15 +2049,15 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Overwatch"),
 		nullptr,
 		SelectedUnit->CanOverwatch(),
-		FText::FromString("No AP")
+		FText::FromString("No TU")
 	});
 
 	Actions.Add({
 		EPlayerUnitActionType::SkipTurn,
 		FText::FromString("Skip"),
 		nullptr,
-		SelectedUnit->GetRemainingActionPoints() > 0,
-		FText::FromString("No AP")
+		SelectedUnit->GetRemainingTimeUnits() > 0,
+		FText::FromString("No TU")
 	});
 
 /*
@@ -2057,7 +2066,7 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("Hunker"),
 		nullptr,
 		SelectedUnit->CanHunkerDown(),
-		FText::FromString("No AP")
+		FText::FromString("No TU")
 	});
 
 */
@@ -2223,8 +2232,8 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 	}
 
 	const int32 HitChance = UStrategyAttackResolver::CalculateHitChance(Context);
-	const int32 RemainingActionPointsAfterShot =
-		FMath::Max(SelectedUnit->GetRemainingActionPoints() - Context.AttackStats->ActionPointCost, 0);
+	const int32 RemainingTimeUnitsAfterShot =
+		FMath::Max(SelectedUnit->GetRemainingTimeUnits() - Context.AttackStats->TimeUnitCost, 0);
 
 	FVector2D ScreenPos;
 	if (!UGameplayStatics::ProjectWorldToScreen(this, HoveredUnit->GetActorLocation(), ScreenPos))
@@ -2244,7 +2253,7 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 	ShootTargetHoverActionPointIconBrush->SetResourceObject(ShootTargetHoverActionPointIcon);
 
 	const FString HitText = FString::Printf(TEXT("%d%%"), HitChance);
-	const FString ActionPointText = FString::Printf(TEXT("%d"), RemainingActionPointsAfterShot);
+	const FString TimeUnitText = FString::Printf(TEXT("%d"), RemainingTimeUnitsAfterShot);
 	const float WidgetWidth = 116.0f;
 	const float WidgetHeight = 30.0f;
 
@@ -2306,7 +2315,7 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 			.VAlign(VAlign_Center)
 			[
 				SNew(STextBlock)
-				.Text(FText::FromString(ActionPointText))
+				.Text(FText::FromString(TimeUnitText))
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.45f, 0.95f, 0.3f, 1.0f)))
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
 				.ShadowOffset(FVector2D(1.0f, 1.0f))
@@ -2403,7 +2412,7 @@ void AStrategyPlayerController::RefreshShootableTargetIcons()
 void AStrategyPlayerController::RefreshShootableTargetIconsForCell(
 	AStrategyUnit* Unit,
 	const FIntPoint& SourceCell,
-	int32 MovementActionPointCost)
+	int32 MovementTimeUnitCost)
 {
 	ClearShootableTargetIcons();
 
@@ -2419,7 +2428,7 @@ void AStrategyPlayerController::RefreshShootableTargetIconsForCell(
 		return;
 	}
 
-	const TArray<AStrategyUnit*> Targets = GetShootableTargetsFromCell(Unit, SourceCell, MovementActionPointCost);
+	const TArray<AStrategyUnit*> Targets = GetShootableTargetsFromCell(Unit, SourceCell, MovementTimeUnitCost);
 	if (Targets.Num() == 0 || !GEngine || !GEngine->GameViewport)
 	{
 		return;
@@ -2478,7 +2487,7 @@ void AStrategyPlayerController::RefreshShootableTargetIconsForCell(
 TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 	AStrategyUnit* Unit,
 	const FIntPoint& SourceCell,
-	int32 MovementActionPointCost) const
+	int32 MovementTimeUnitCost) const
 {
 	TArray<AStrategyUnit*> Targets;
 
@@ -2494,8 +2503,8 @@ TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 		return Targets;
 	}
 
-	const int32 RemainingActionPointsAfterMove = Unit->GetRemainingActionPoints() - FMath::Max(MovementActionPointCost, 0);
-	if (RemainingActionPointsAfterMove < AttackStats->ActionPointCost)
+	const int32 RemainingTimeUnitsAfterMove = Unit->GetRemainingTimeUnits() - FMath::Max(MovementTimeUnitCost, 0);
+	if (RemainingTimeUnitsAfterMove < AttackStats->TimeUnitCost)
 	{
 		return Targets;
 	}

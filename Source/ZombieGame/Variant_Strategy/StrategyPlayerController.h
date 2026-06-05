@@ -425,7 +425,7 @@ protected:
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
 	void RefreshPlayerUnitRoster();
 	void RefreshShootableTargetIcons();
-	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost);
+	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost);
 	void UpdateShootTargetHoverIndicator();
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
 	void UpdateOverwatchPlacementPreview();
@@ -524,7 +524,7 @@ private:
 	TArray<AStrategyUnit*> GetWeaponDebugTargetUnits() const;
 	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
 	UStrategyWeaponData* FindDebugWeapon(FName WeaponId) const;
-	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementActionPointCost) const;
+	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost) const;
 	AStrategyUnit* GetHoveredStrategyUnit();
 
 	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;

@@ -36,7 +36,7 @@ void UEnemyUnitAI::TakeTurn(
 
 void UEnemyUnitAI::ExecuteNextAction()
 {
-	if (!IsValid(OwnerUnit) || OwnerUnit->GetCurrentHealth() <= 0 || OwnerUnit->GetRemainingActionPoints() <= 0)
+	if (!IsValid(OwnerUnit) || OwnerUnit->GetCurrentHealth() <= 0 || OwnerUnit->GetRemainingTimeUnits() <= 0)
 	{
 		FinishUnitTurn();
 		return;
@@ -166,7 +166,7 @@ void UEnemyUnitAI::OnMoveCompleted(AStrategyUnit* MovedUnit)
 		return;
 	}
 
-	OwnerUnit->UseAtionPoints(CurrentAction.ActionPointCost);
+	OwnerUnit->SpendTimeUnits(CurrentAction.TimeUnitCost);
 
 	ExecuteNextAction();
 }

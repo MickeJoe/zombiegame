@@ -192,7 +192,7 @@ void UPlayerUnitRosterCardWidget::BuildDefaultLayout()
 	TextStack->AddChildToVerticalBox(ActionPointRow);
 
 	Text_ActionPoints = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_ActionPoints"));
-	Text_ActionPoints->SetText(FText::FromString(TEXT("AP")));
+	Text_ActionPoints->SetText(FText::FromString(TEXT("TU")));
 	if (UHorizontalBoxSlot* ActionLabelSlot = ActionPointRow->AddChildToHorizontalBox(Text_ActionPoints))
 	{
 		ActionLabelSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
@@ -253,7 +253,7 @@ void UPlayerUnitRosterCardWidget::Refresh()
 
 	if (Text_ActionPoints)
 	{
-		Text_ActionPoints->SetText(FText::FromString(TEXT("AP")));
+		Text_ActionPoints->SetText(FText::FromString(TEXT("TU")));
 		SetTextStyle(Text_ActionPoints, TextWhite, 13);
 	}
 
@@ -261,16 +261,16 @@ void UPlayerUnitRosterCardWidget::Refresh()
 	{
 		Text_ActionPointsValue->SetText(FText::Format(
 			NSLOCTEXT("PlayerUnitRoster", "ActionPointValueFormat", "{0}/{1}"),
-			FText::AsNumber(Entry.CurrentActionPoints),
-			FText::AsNumber(Entry.MaxActionPoints)));
+			FText::AsNumber(Entry.CurrentTimeUnits),
+			FText::AsNumber(Entry.MaxTimeUnits)));
 		SetTextStyle(Text_ActionPointsValue, AccentYellow, 13);
 	}
 	else if (Text_ActionPoints)
 	{
 		Text_ActionPoints->SetText(FText::Format(
-			NSLOCTEXT("PlayerUnitRoster", "ActionPointFormat", "AP {0}/{1}"),
-			FText::AsNumber(Entry.CurrentActionPoints),
-			FText::AsNumber(Entry.MaxActionPoints)));
+			NSLOCTEXT("PlayerUnitRoster", "ActionPointFormat", "TU {0}/{1}"),
+			FText::AsNumber(Entry.CurrentTimeUnits),
+			FText::AsNumber(Entry.MaxTimeUnits)));
 	}
 }
 
@@ -367,8 +367,8 @@ void UPlayerUnitRosterWidget::SetUnits(
 		Entry.Icon = Unit->UnitData ? Unit->UnitData->Icon : nullptr;
 		Entry.CurrentHealth = Unit->GetCurrentHealth();
 		Entry.MaxHealth = Unit->GetMaxHealth();
-		Entry.CurrentActionPoints = Unit->GetRemainingActionPoints();
-		Entry.MaxActionPoints = Unit->GetMaxActionPoints();
+		Entry.CurrentTimeUnits = Unit->GetRemainingTimeUnits();
+		Entry.MaxTimeUnits = Unit->GetMaxTimeUnits();
 		Entry.bSelected = SelectedUnits.Contains(Unit);
 
 		Card->SetEntry(Entry);

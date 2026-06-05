@@ -313,6 +313,17 @@ bool AGridManager::IsCellWithinMoveRange(
     int32 MaxMoveCells
 ) const
 {
+    int32 MoveCostCells = 0;
+    return TryGetMoveCostCells(Unit, Cell, MoveCostCells)
+        && MoveCostCells <= MaxMoveCells;
+}
+
+bool AGridManager::TryGetMoveCostCells(
+    const AStrategyUnit* Unit,
+    const FIntPoint& Cell,
+    int32& OutMoveCostCells
+) const
+{
     if (!Unit)
     {
         return false;
@@ -351,9 +362,13 @@ bool AGridManager::IsCellWithinMoveRange(
         return false;
     }
 
-    const float MaxMoveDistanceWorld = MaxMoveCells * CellSize;
+    if (CellSize <= 0.0f)
+    {
+        return false;
+    }
 
-    return PathLength <= MaxMoveDistanceWorld;
+    OutMoveCostCells = FMath::Max(FMath::CeilToInt(PathLength / CellSize), 0);
+    return true;
 }
 
 void AGridManager::GetCellsInRange(

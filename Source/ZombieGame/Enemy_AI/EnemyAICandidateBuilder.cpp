@@ -141,7 +141,7 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
     const FIntPoint TargetCell =
         GridManager->WorldToGrid(TargetUnit->GetActorLocation());
 
-    const int32 MoveRange = Unit->GetMaxMovement();
+    const int32 MoveRange = Unit->GetRemainingTimeUnits();
 	const TSet<FIntPoint>& CandidateCells = SightManager->GetEnemyVisibleCells();
 	TSet<FIntPoint> OccupiedCells;
 	AddOccupiedCells(PlayerSide->Units, Unit, GridManager, OccupiedCells);
@@ -198,7 +198,7 @@ void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
     FEnemyActionCandidate Candidate;
     Candidate.ActionType = EEnemyAIActionType::MoveTowardNearestVisiblePlayer;
     Candidate.TargetCell = BestCell;
-    Candidate.ActionPointCost = 1;
+    GridManager->TryGetMoveCostCells(Unit, BestCell, Candidate.TimeUnitCost);
     Candidate.DistanceToTargetAfterMove = BestManhattanDistance;
 
     OutCandidates.Add(Candidate);
