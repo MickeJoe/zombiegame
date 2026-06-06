@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "CoreMinimal.h"
 #include "Data/Weapon/AttackStats.h"
 
 #include "UnitData.generated.h"
@@ -8,6 +9,24 @@ class UStrategyWeaponData;
 class UEquippableItemData;
 class UTargetInfoWidget;
 class UEnemyUnitAI;
+class UAnimMontage;
+class UTexture2D;
+class UUserWidget;
+
+USTRUCT(BlueprintType)
+struct FStrategyAttackAnimation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TObjectPtr<UAnimMontage> Montage = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FName MeshComponentName = TEXT("Body");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FName MontageSection = NAME_None;
+};
 
 UCLASS(BlueprintType)
 class UUnitData : public UPrimaryDataAsset
@@ -51,7 +70,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Defense")
 	int32 CriticalDefense = 0;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat", meta=(DeprecatedProperty, DeprecationMessage="Use a UStrategyWeaponData with AttackType Bite in DefaultItems instead."))
 	FAttackStats BiteAttack;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat")
@@ -80,4 +99,16 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
 	TObjectPtr<UAnimMontage> DeathReactMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Combat")
+	TMap<FName, FStrategyAttackAnimation> WeaponAttackAnimations;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Combat")
+	FStrategyAttackAnimation DefaultFireAttackAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Combat")
+	FStrategyAttackAnimation DefaultMeleeAttackAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Combat")
+	FStrategyAttackAnimation DefaultBiteAttackAnimation;
 };

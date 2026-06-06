@@ -280,6 +280,7 @@ void UStrategyTargetingComponent::HandleFireClicked()
 		return;
 	}
 
+	Attacker->FaceTargetForAttack(Target);
 	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
 	if (TargetingMode == EStrategyTargetingMode::Melee)
 	{
@@ -288,6 +289,7 @@ void UStrategyTargetingComponent::HandleFireClicked()
 	}
 	else
 	{
+		Attacker->PlayWeaponAttackMontage(Attacker->GetEquippedFireWeapon());
 		Attacker->SpendWeaponAttackResources();
 	}
 

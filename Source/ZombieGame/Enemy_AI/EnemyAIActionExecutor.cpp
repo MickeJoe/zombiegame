@@ -2,7 +2,10 @@
 
 #include "StrategyUnit.h"
 #include "EnemyUnitAI.h"
+#include "StrategyPlayerController.h"
 #include "Systems/GridManager.h"
+#include "Systems/AttackHandling/StrategyAttackResolver.h"
+#include "TimerManager.h"
 
 void FEnemyAIActionExecutor::Execute(
 	AGridManager* GridManager,
@@ -42,13 +45,49 @@ void FEnemyAIActionExecutor::ExecuteBiteAttack(
 	const FEnemyActionCandidate& Candidate,
 	UEnemyUnitAI* OwnerAI)
 {
-	// @ToDo: Improve
-	const FAttackStats& AttackStats = Unit->GetBiteAttackStats();
-	FWeaponDamage Damage;
-	Damage.Damage = AttackStats.Damage;
-	
-	Unit->ApplyDamage(Damage);
-	OwnerAI->OnMoveCompleted(Unit);
+	if (!IsValid(Unit) || !IsValid(Candidate.TargetUnit))
+	{
+		ensureMsgf(false, TEXT("ExecuteBiteAttack - Invalid attacker or target"));
+		if (OwnerAI)
+		{
+			OwnerAI->OnMoveCompleted(Unit);
+		}
+		return;
+	}
+
+	const FAttackStats* AttackStats = Unit->GetBiteAttackStatsPtr();
+	if (!AttackStats || Unit->GetRemainingTimeUnits() < Unit->GetBiteAttackTimeUnitCost())
+	{
+		if (OwnerAI)
+		{
+			OwnerAI->OnMoveCompleted(Unit);
+		}
+		return;
+	}
+
+	const FStrategyAttackContext Context =
+		UStrategyAttackResolver::MakeContextWithAttackStats(Unit, Candidate.TargetUnit, AttackStats);
+	Unit->FaceTargetForAttack(Candidate.TargetUnit);
+	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
+	const float AttackMontageDuration = Unit->PlayBiteAttackMontage();
+
+	if (AStrategyPlayerController* PC = Unit->GetWorld()
+		? Unit->GetWorld()->GetFirstPlayerController<AStrategyPlayerController>()
+		: nullptr)
+	{
+		PC->RefreshPlayerUnitRoster();
+	}
+
+	if (OwnerAI)
+	{
+		const float ActionDelay = FMath::Max3(AttackMontageDuration, Result.ReactionMontageDuration, 0.1f);
+		FTimerHandle BiteActionCompleteTimerHandle;
+		Unit->GetWorldTimerManager().SetTimer(
+			BiteActionCompleteTimerHandle,
+			FTimerDelegate::CreateUObject(OwnerAI, &UEnemyUnitAI::OnMoveCompleted, Unit),
+			ActionDelay,
+			false);
+	}
 }
 
 void FEnemyAIActionExecutor::ExecuteMove(

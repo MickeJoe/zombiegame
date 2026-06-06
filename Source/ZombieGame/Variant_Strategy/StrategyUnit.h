@@ -128,6 +128,9 @@ public:
 
 	FAttackStats GetBiteAttackStats() const;
 	const FAttackStats* GetMeleeAttackStats() const;
+	const FAttackStats* GetBiteAttackStatsPtr() const;
+	int32 GetBiteAttackRange() const;
+	int32 GetBiteAttackTimeUnitCost() const;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
@@ -148,7 +151,10 @@ public:
 	void SpendWeaponAttackResources();
 	void StartMeleeAttackMode();
 	void StartWeaponAttackMode();
+	void FaceTargetForAttack(const AStrategyUnit* Target);
+	float PlayWeaponAttackMontage(const FStrategyWeaponInstance& Weapon);
 	float PlayMeleeAttackMontage();
+	float PlayBiteAttackMontage();
 	bool CanReload() const;
 	void ReloadWeapon();
 	bool CanOverwatch() const;
@@ -213,6 +219,7 @@ public:
 	const FStrategyWeaponInstance& GetWeaponInSlot(EEquippableItemSlot WeaponSlot) const;
 	const FStrategyWeaponInstance& GetEquippedFireWeapon() const;
 	const FStrategyWeaponInstance& GetEquippedMeleeWeapon() const;
+	const FStrategyWeaponInstance& GetEquippedBiteWeapon() const;
 	UMedicBagData* GetEquippedMedicBag() const;
 	bool CanUseMedicBagOn(const AStrategyUnit* Target) const;
 	bool UseMedicBagOn(AStrategyUnit* Target);
@@ -318,6 +325,8 @@ protected:
 private:
 	void RebuildEquippedWeaponInstances();
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
+	UAnimMontage* ResolveWeaponAttackMontage(const FStrategyWeaponInstance& Weapon, EStrategyWeaponAttackType FallbackAttackType, FName& OutMeshComponentName, FName& OutMontageSection) const;
+	float PlayResolvedAttackMontage(UAnimMontage* Montage, FName AttackMeshComponentName, FName MontageSection, const TCHAR* LogContext);
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
 	void UpdateMeleeWeaponVisual();
 	void ConfigureVisualComponentsForTacticalMovement();

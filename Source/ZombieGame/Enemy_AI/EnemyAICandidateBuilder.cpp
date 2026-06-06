@@ -52,6 +52,13 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 
 	const FIntPoint UnitCell =
 		GridManager->WorldToGrid(Unit->GetActorLocation());
+	const FAttackStats* BiteAttackStats = Unit->GetBiteAttackStatsPtr();
+	const int32 BiteRange = Unit->GetBiteAttackRange();
+	const int32 BiteTimeUnitCost = Unit->GetBiteAttackTimeUnitCost();
+	if (!BiteAttackStats || Unit->GetRemainingTimeUnits() < BiteTimeUnitCost)
+	{
+		return;
+	}
 
 	AStrategyUnit* BestTarget = nullptr;
 	FIntPoint BestTargetCell = FIntPoint::ZeroValue;
@@ -76,7 +83,7 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 			FMath::Abs(PlayerCell.X - UnitCell.X) +
 			FMath::Abs(PlayerCell.Y - UnitCell.Y);
 
-		if (Distance != 1)
+		if (Distance > BiteRange)
 		{
 			continue;
 		}
@@ -100,6 +107,7 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 	Candidate.ActionType = EEnemyAIActionType::BiteAttack;
 	Candidate.TargetUnit = BestTarget;
 	Candidate.TargetCell = BestTargetCell;
+	Candidate.TimeUnitCost = BiteTimeUnitCost;
 
 	OutCandidates.Add(Candidate);
 }

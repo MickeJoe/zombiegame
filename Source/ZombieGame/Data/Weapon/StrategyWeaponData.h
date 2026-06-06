@@ -10,7 +10,8 @@ UENUM(BlueprintType)
 enum class EStrategyWeaponAttackType : uint8
 {
 	Fire,
-	Melee
+	Melee,
+	Bite
 };
 
 UCLASS(Blueprintable)

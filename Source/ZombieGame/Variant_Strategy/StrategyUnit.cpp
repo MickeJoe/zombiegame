@@ -244,6 +244,24 @@ void AStrategyUnit::Interact(AStrategyUnit* Interactor)
 	
 }
 
+void AStrategyUnit::FaceTargetForAttack(const AStrategyUnit* Target)
+{
+	if (!IsValid(Target))
+	{
+		return;
+	}
+
+	FVector Direction = Target->GetActorLocation() - GetActorLocation();
+	Direction.Z = 0.0f;
+
+	if (Direction.IsNearlyZero())
+	{
+		return;
+	}
+
+	SetActorRotation(Direction.Rotation());
+}
+
 bool AStrategyUnit::MoveToLocation(const FVector& Location, float AcceptanceRadius)
 {
 	// ensure we have a valid AI Controller
@@ -377,6 +395,11 @@ int32 AStrategyUnit::GetMaxArmor() const
 
 FAttackStats AStrategyUnit::GetBiteAttackStats() const
 {
+	if (const FAttackStats* WeaponAttackStats = GetBiteAttackStatsPtr())
+	{
+		return *WeaponAttackStats;
+	}
+
 	return UnitData ? UnitData->BiteAttack : FAttackStats();
 }
 
@@ -388,6 +411,38 @@ const FAttackStats* AStrategyUnit::GetMeleeAttackStats() const
 	}
 
 	return UnitData ? &UnitData->HandAttack : nullptr;
+}
+
+const FAttackStats* AStrategyUnit::GetBiteAttackStatsPtr() const
+{
+	if (const FAttackStats* WeaponAttackStats = GetEquippedBiteWeapon().GetAttackStats())
+	{
+		return WeaponAttackStats;
+	}
+
+	return UnitData ? &UnitData->BiteAttack : nullptr;
+}
+
+int32 AStrategyUnit::GetBiteAttackRange() const
+{
+	const FStrategyWeaponInstance& BiteWeapon = GetEquippedBiteWeapon();
+	if (BiteWeapon.WeaponData)
+	{
+		return FMath::Max(BiteWeapon.WeaponData->Range, 1);
+	}
+
+	return 1;
+}
+
+int32 AStrategyUnit::GetBiteAttackTimeUnitCost() const
+{
+	const FStrategyWeaponInstance& BiteWeapon = GetEquippedBiteWeapon();
+	if (BiteWeapon.WeaponData)
+	{
+		return FMath::Max(BiteWeapon.WeaponData->TimeUnitCost, 0);
+	}
+
+	return 1;
 }
 
 void AStrategyUnit::Tick(float DeltaTime)
@@ -596,11 +651,10 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	const FStrategyWeaponInstance& MeleeWeapon = GetEquippedMeleeWeapon();
-	const int32 MeleeTimeUnitCost = MeleeWeapon.WeaponData
-		? MeleeWeapon.WeaponData->TimeUnitCost
+	const int32 FireTimeUnitCost = FireWeapon.WeaponData
+		? FireWeapon.WeaponData->TimeUnitCost
 		: 1;
-	if (GetRemainingTimeUnits() < MeleeTimeUnitCost)
+	if (GetRemainingTimeUnits() < FireTimeUnitCost)
 	{
 		return false;
 	}
@@ -885,11 +939,78 @@ void AStrategyUnit::StartMeleeAttackMode()
 	}
 }
 
-float AStrategyUnit::PlayMeleeAttackMontage()
+UAnimMontage* AStrategyUnit::ResolveWeaponAttackMontage(
+	const FStrategyWeaponInstance& Weapon,
+	EStrategyWeaponAttackType FallbackAttackType,
+	FName& OutMeshComponentName,
+	FName& OutMontageSection) const
 {
-	if (!MeleeAttackMontage)
+	OutMeshComponentName = MeleeAttackMontageMeshComponentName;
+	OutMontageSection = NAME_None;
+	const EStrategyWeaponAttackType AttackType = Weapon.WeaponData
+		? Weapon.WeaponData->AttackType
+		: FallbackAttackType;
+
+	if (!UnitData)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Melee attack montage is not assigned for %s"), *GetName());
+		return AttackType != EStrategyWeaponAttackType::Melee
+			? nullptr
+			: MeleeAttackMontage;
+	}
+
+	if (Weapon.WeaponData)
+	{
+		if (const FStrategyAttackAnimation* WeaponAnimation = UnitData->WeaponAttackAnimations.Find(Weapon.WeaponData->ItemId))
+		{
+			if (WeaponAnimation->Montage)
+			{
+				OutMeshComponentName = WeaponAnimation->MeshComponentName;
+				OutMontageSection = WeaponAnimation->MontageSection;
+				return WeaponAnimation->Montage;
+			}
+		}
+	}
+
+	const FStrategyAttackAnimation* DefaultAnimation = nullptr;
+	switch (AttackType)
+	{
+	case EStrategyWeaponAttackType::Fire:
+		DefaultAnimation = &UnitData->DefaultFireAttackAnimation;
+		break;
+
+	case EStrategyWeaponAttackType::Melee:
+		DefaultAnimation = &UnitData->DefaultMeleeAttackAnimation;
+		break;
+
+	case EStrategyWeaponAttackType::Bite:
+		DefaultAnimation = &UnitData->DefaultBiteAttackAnimation;
+		break;
+
+	default:
+		break;
+	}
+
+	if (DefaultAnimation && DefaultAnimation->Montage)
+	{
+		OutMeshComponentName = DefaultAnimation->MeshComponentName;
+		OutMontageSection = DefaultAnimation->MontageSection;
+		return DefaultAnimation->Montage;
+	}
+
+	return AttackType != EStrategyWeaponAttackType::Melee
+		? nullptr
+		: MeleeAttackMontage;
+}
+
+float AStrategyUnit::PlayResolvedAttackMontage(
+	UAnimMontage* Montage,
+	FName AttackMeshComponentName,
+	FName MontageSection,
+	const TCHAR* LogContext)
+{
+	if (!Montage)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s montage is not assigned for %s"), LogContext, *GetName());
 		return 0.0f;
 	}
 
@@ -898,13 +1019,13 @@ float AStrategyUnit::PlayMeleeAttackMontage()
 
 	USkeletalMeshComponent* CharacterMesh = nullptr;
 	UAnimInstance* AnimInstance = nullptr;
-	const USkeleton* MontageSkeleton = MeleeAttackMontage->GetSkeleton();
+	const USkeleton* MontageSkeleton = Montage->GetSkeleton();
 
-	if (!MeleeAttackMontageMeshComponentName.IsNone())
+	if (!AttackMeshComponentName.IsNone())
 	{
 		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
 		{
-			if (MeshComponent && MeshComponent->GetFName() == MeleeAttackMontageMeshComponentName)
+			if (MeshComponent && MeshComponent->GetFName() == AttackMeshComponentName)
 			{
 				CharacterMesh = MeshComponent;
 				AnimInstance = MeshComponent->GetAnimInstance();
@@ -952,12 +1073,13 @@ float AStrategyUnit::PlayMeleeAttackMontage()
 
 	if (!CharacterMesh || !AnimInstance)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Cannot play melee montage for %s. RequestedMesh=%s Mesh=%s AnimInstance=%s Montage=%s"),
+		UE_LOG(LogTemp, Warning, TEXT("Cannot play %s montage for %s. RequestedMesh=%s Mesh=%s AnimInstance=%s Montage=%s"),
+			LogContext,
 			*GetName(),
-			*MeleeAttackMontageMeshComponentName.ToString(),
+			*AttackMeshComponentName.ToString(),
 			*GetNameSafe(GetMesh()),
 			*GetNameSafe(AnimInstance),
-			*GetNameSafe(MeleeAttackMontage));
+			*GetNameSafe(Montage));
 		return 0.0f;
 	}
 
@@ -966,36 +1088,79 @@ float AStrategyUnit::PlayMeleeAttackMontage()
 		: nullptr;
 	if (MeshSkeleton && MontageSkeleton && MeshSkeleton != MontageSkeleton)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Melee montage skeleton mismatch for %s. Mesh=%s MeshSkeleton=%s Montage=%s MontageSkeleton=%s"),
+		UE_LOG(LogTemp, Warning, TEXT("%s montage skeleton mismatch for %s. Mesh=%s MeshSkeleton=%s Montage=%s MontageSkeleton=%s"),
+			LogContext,
 			*GetName(),
 			*GetNameSafe(CharacterMesh->GetSkeletalMeshAsset()),
 			*GetNameSafe(MeshSkeleton),
-			*GetNameSafe(MeleeAttackMontage),
+			*GetNameSafe(Montage),
 			*GetNameSafe(MontageSkeleton));
 		return 0.0f;
 	}
 
-	const float PlayedLength = AnimInstance->Montage_Play(MeleeAttackMontage);
+	const float PlayedLength = AnimInstance->Montage_Play(Montage);
 	if (PlayedLength <= 0.0f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to play melee attack montage for %s. Mesh=%s AnimInstance=%s Montage=%s MeshSkeleton=%s MontageSkeleton=%s"),
+		UE_LOG(LogTemp, Warning, TEXT("Failed to play %s montage for %s. Mesh=%s AnimInstance=%s Montage=%s MeshSkeleton=%s MontageSkeleton=%s"),
+			LogContext,
 			*GetName(),
 			*GetNameSafe(CharacterMesh->GetSkeletalMeshAsset()),
 			*GetNameSafe(AnimInstance),
-			*GetNameSafe(MeleeAttackMontage),
+			*GetNameSafe(Montage),
 			*GetNameSafe(MeshSkeleton),
 			*GetNameSafe(MontageSkeleton));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Playing melee attack montage %s on %s using mesh %s for %.2f seconds"),
-			*GetNameSafe(MeleeAttackMontage),
+		if (!MontageSection.IsNone())
+		{
+			AnimInstance->Montage_JumpToSection(MontageSection, Montage);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Playing %s montage %s on %s using mesh %s for %.2f seconds"),
+			LogContext,
+			*GetNameSafe(Montage),
 			*GetName(),
 			*GetNameSafe(CharacterMesh),
 			PlayedLength);
 	}
 
 	return PlayedLength;
+}
+
+float AStrategyUnit::PlayWeaponAttackMontage(const FStrategyWeaponInstance& Weapon)
+{
+	FName AttackMeshComponentName = NAME_None;
+	FName MontageSection = NAME_None;
+	const EStrategyWeaponAttackType FallbackAttackType = Weapon.WeaponData
+		? Weapon.WeaponData->AttackType
+		: EStrategyWeaponAttackType::Melee;
+	UAnimMontage* Montage = ResolveWeaponAttackMontage(Weapon, FallbackAttackType, AttackMeshComponentName, MontageSection);
+	return PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("weapon attack"));
+}
+
+float AStrategyUnit::PlayMeleeAttackMontage()
+{
+	FName AttackMeshComponentName = NAME_None;
+	FName MontageSection = NAME_None;
+	UAnimMontage* Montage = ResolveWeaponAttackMontage(
+		GetEquippedMeleeWeapon(),
+		EStrategyWeaponAttackType::Melee,
+		AttackMeshComponentName,
+		MontageSection);
+	return PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("melee attack"));
+}
+
+float AStrategyUnit::PlayBiteAttackMontage()
+{
+	FName AttackMeshComponentName = NAME_None;
+	FName MontageSection = NAME_None;
+	UAnimMontage* Montage = ResolveWeaponAttackMontage(
+		GetEquippedBiteWeapon(),
+		EStrategyWeaponAttackType::Bite,
+		AttackMeshComponentName,
+		MontageSection);
+	return PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("bite attack"));
 }
 
 USkeletalMeshComponent* AStrategyUnit::FindMeleeWeaponAttachMesh() const
@@ -1346,6 +1511,27 @@ const FStrategyWeaponInstance& AStrategyUnit::GetEquippedMeleeWeapon() const
 	}
 
 	if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Melee))
+	{
+		return SecondaryWeapon;
+	}
+
+	return EmptyWeaponInstance;
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetEquippedBiteWeapon() const
+{
+	const FStrategyWeaponInstance& ActiveWeapon = GetWeaponInSlot(ActiveWeaponSlot);
+	if (DoesWeaponMatchAttackType(ActiveWeapon, EStrategyWeaponAttackType::Bite))
+	{
+		return ActiveWeapon;
+	}
+
+	if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Bite))
+	{
+		return PrimaryWeapon;
+	}
+
+	if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Bite))
 	{
 		return SecondaryWeapon;
 	}

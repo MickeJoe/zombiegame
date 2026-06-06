@@ -63,6 +63,7 @@ public:
 	void ShowTurnBanner(ETurnOwner TurnOwner);
 
 	void SetPlayerEndTurnButtonEnabled(bool bIsEnabledIn);	
+	void RefreshPlayerUnitRoster();
 
 protected:
 
@@ -425,7 +426,6 @@ protected:
 	void UpdateMovementHighlights();
 	void UpdateMovementPreview();
 	bool IsSelectableUnit(const AStrategyUnit* Unit) const;
-	void RefreshPlayerUnitRoster();
 	void RefreshShootableTargetIcons();
 	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost);
 	void UpdateShootTargetHoverIndicator();
