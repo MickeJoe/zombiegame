@@ -15,10 +15,10 @@ enum class EStrategyWeaponAttackType : uint8
 };
 
 UENUM(BlueprintType)
-enum class EStrategyWeaponHandedness : uint8
+enum class EStrategyWeaponSlot : uint8
 {
-	OneHanded,
-	TwoHanded
+	Primary,
+	Secondary
 };
 
 UCLASS(Blueprintable)
@@ -40,7 +40,7 @@ public:
 	EStrategyWeaponAttackType AttackType = EStrategyWeaponAttackType::Fire;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment")
-	EStrategyWeaponHandedness Handedness = EStrategyWeaponHandedness::TwoHanded;
+	EStrategyWeaponSlot WeaponSlot = EStrategyWeaponSlot::Primary;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FAttackStats AttackStats;

@@ -7,16 +7,30 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SConstraintCanvas.h"
+#include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
 namespace
 {
-	const FLinearColor PanelColor(0.025f, 0.09f, 0.12f, 0.92f);
-	const FLinearColor WeaponInfoAccentBlue(0.0f, 0.62f, 1.0f, 1.0f);
+	const FLinearColor WeaponCardColor(0.0f, 0.0f, 0.0f, 0.94f);
+	const FLinearColor WeaponCardSelectedColor(0.0f, 0.0f, 0.0f, 0.98f);
+	const FLinearColor WeaponCardBorderColor(0.58f, 0.68f, 0.68f, 0.72f);
+	const FLinearColor WeaponCardSelectedBorderColor(0.0f, 0.92f, 0.88f, 1.0f);
 	const FLinearColor WeaponInfoAccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
-	const FLinearColor PipFilled(0.0f, 0.72f, 1.0f, 1.0f);
-	const FLinearColor PipEmpty(0.0f, 0.72f, 1.0f, 0.24f);
+
+	FText GetWeaponDisplayName(UStrategyWeaponData* WeaponData)
+	{
+		FString DisplayName = TEXT("Empty");
+		if (WeaponData)
+		{
+			DisplayName = WeaponData->DisplayName.IsEmpty()
+				? WeaponData->WeaponId.ToString()
+				: WeaponData->DisplayName.ToString();
+		}
+		DisplayName.ToUpperInline();
+		return FText::FromString(DisplayName);
+	}
 }
 
 void SWeaponInfoSlateWidget::Construct(const FArguments& InArgs)
@@ -29,19 +43,13 @@ void SWeaponInfoSlateWidget::Construct(const FArguments& InArgs)
 		+ SConstraintCanvas::Slot()
 		.Anchors(FAnchors(0.0f, 1.0f))
 		.Alignment(FVector2D(0.0f, 1.0f))
-		.Offset(FMargin(28.0f, -36.0f, 268.0f, 228.0f))
+		.Offset(FMargin(28.0f, -36.0f, 286.0f, 166.0f))
 		[
 			SNew(SBox)
-			.WidthOverride(268.0f)
-			.HeightOverride(228.0f)
+			.WidthOverride(286.0f)
+			.HeightOverride(166.0f)
 			[
-				SNew(SBorder)
-				.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
-				.BorderBackgroundColor(PanelColor)
-				.Padding(FMargin(12.0f, 10.0f))
-				[
-					SAssignNew(WeaponListBox, SVerticalBox)
-				]
+				SAssignNew(WeaponListBox, SVerticalBox)
 			]
 		]
 	];
@@ -63,158 +71,155 @@ void SWeaponInfoSlateWidget::SetUnit(AStrategyUnit* SelectedUnit)
 		return;
 	}
 
-	const FStrategyWeaponInstance& FireWeapon = SelectedUnit->GetEquippedFireWeapon();
-	const FStrategyWeaponInstance& MeleeWeapon = SelectedUnit->GetEquippedMeleeWeapon();
+	const FStrategyWeaponInstance& PrimaryWeapon = SelectedUnit->GetWeaponInSlot(EStrategyWeaponSlot::Primary);
+	const FStrategyWeaponInstance& SecondaryWeapon = SelectedUnit->GetWeaponInSlot(EStrategyWeaponSlot::Secondary);
 
-	const bool bHasFireWeapon = FireWeapon.WeaponData != nullptr;
-	const bool bHasMeleeWeapon = MeleeWeapon.WeaponData != nullptr;
-	if (!bHasFireWeapon && !bHasMeleeWeapon)
+	const bool bHasPrimaryWeapon = PrimaryWeapon.WeaponData != nullptr;
+	const bool bHasSecondaryWeapon = SecondaryWeapon.WeaponData != nullptr;
+	if (!bHasPrimaryWeapon && !bHasSecondaryWeapon)
 	{
 		SetVisibility(EVisibility::Collapsed);
 		return;
 	}
 
-	SetVisibility(EVisibility::HitTestInvisible);
+	SetVisibility(EVisibility::Visible);
 
-	if (bHasFireWeapon)
-	{
-		AddWeaponRow(FireWeapon);
-	}
-
-	if (bHasMeleeWeapon && MeleeWeapon.WeaponData != FireWeapon.WeaponData)
-	{
-		AddWeaponRow(MeleeWeapon);
-	}
+	AddWeaponRow(SelectedUnit, EStrategyWeaponSlot::Primary, PrimaryWeapon);
+	AddWeaponRow(SelectedUnit, EStrategyWeaponSlot::Secondary, SecondaryWeapon);
 }
 
-void SWeaponInfoSlateWidget::AddWeaponRow(const FStrategyWeaponInstance& Weapon)
+void SWeaponInfoSlateWidget::AddWeaponRow(
+	AStrategyUnit* SelectedUnit,
+	EStrategyWeaponSlot WeaponSlot,
+	const FStrategyWeaponInstance& Weapon)
 {
-	if (!WeaponListBox.IsValid() || !Weapon.WeaponData)
+	if (!WeaponListBox.IsValid())
 	{
 		return;
 	}
 
 	UStrategyWeaponData* WeaponData = Weapon.WeaponData;
+	const bool bSelected = SelectedUnit && SelectedUnit->GetActiveWeaponSlot() == WeaponSlot;
 
 	TSharedPtr<FSlateBrush> IconBrush;
-	if (WeaponData->Icon)
+	if (WeaponData && WeaponData->Icon)
 	{
 		IconBrush = MakeShared<FSlateBrush>();
 		IconBrush->SetResourceObject(WeaponData->Icon);
-		IconBrush->ImageSize = FVector2D(112.0f, 28.0f);
+		IconBrush->ImageSize = FVector2D(148.0f, 42.0f);
 		IconBrush->DrawAs = ESlateBrushDrawType::Image;
 		WeaponIconBrushes.Add(IconBrush);
 	}
 
 	WeaponListBox->AddSlot()
 	.AutoHeight()
-	.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+	.Padding(0.0f, 0.0f, 0.0f, 6.0f)
 	[
-		SNew(SVerticalBox)
-
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(0.0f, 0.0f, 0.0f, 4.0f)
+		SNew(SButton)
+		.ButtonStyle(FCoreStyle::Get(), TEXT("NoBorder"))
+		.ButtonColorAndOpacity(FLinearColor::Transparent)
+		.ContentPadding(0.0f)
+		.OnClicked(this, &SWeaponInfoSlateWidget::OnWeaponSlotClicked, SelectedUnit, WeaponSlot)
 		[
-			SNew(STextBlock)
-			.Text(WeaponData->DisplayName.IsEmpty()
-				? FText::FromName(WeaponData->WeaponId)
-				: WeaponData->DisplayName)
-			.ColorAndOpacity(WeaponInfoAccentBlue)
-			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
-		]
+			SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+			.BorderBackgroundColor(bSelected ? WeaponCardSelectedBorderColor : WeaponCardBorderColor)
+			.Padding(bSelected ? 2.0f : 1.0f)
+			[
+				SNew(SBorder)
+				.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+				.BorderBackgroundColor(bSelected ? WeaponCardSelectedColor : WeaponCardColor)
+				.Padding(FMargin(10.0f, 5.0f, 10.0f, 6.0f))
+				[
+					SNew(SBox)
+					.HeightOverride(72.0f)
+					[
+						SNew(SVerticalBox)
 
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(2.0f, 0.0f, 0.0f, 4.0f)
-		[
-			SNew(SBox)
-			.WidthOverride(240.0f)
-			.HeightOverride(28.0f)
-			[
-				SNew(SImage)
-				.Image(IconBrush.IsValid() ? IconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
-				.ColorAndOpacity(IconBrush.IsValid()
-					? FLinearColor::White
-					: FLinearColor(0.72f, 0.72f, 0.68f, 0.65f))
-			]
-		]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.HAlign(HAlign_Center)
+						[
+							SNew(STextBlock)
+							.Text(GetWeaponDisplayName(WeaponData))
+							.ColorAndOpacity(WeaponData ? FLinearColor::White : FLinearColor(0.82f, 0.86f, 0.88f, 1.0f))
+							.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+						]
 
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(0.0f, 0.0f, 0.0f, 4.0f)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("DAMAGE")))
-				.ColorAndOpacity(FLinearColor::White)
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 14))
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			.Padding(0.0f, 0.0f, 16.0f, 0.0f)
-			[
-				SNew(STextBlock)
-				.Text(FText::AsNumber(WeaponData->AttackStats.Damage))
-				.ColorAndOpacity(WeaponInfoAccentYellow)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 15))
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("RANGE")))
-				.ColorAndOpacity(FLinearColor::White)
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 14))
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(FText::AsNumber(WeaponData->AttackStats.Range))
-				.ColorAndOpacity(WeaponInfoAccentYellow)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 15))
+						+ SVerticalBox::Slot()
+						.FillHeight(1.0f)
+						.Padding(0.0f, 3.0f, 0.0f, 0.0f)
+						[
+							SNew(SHorizontalBox)
+
+							+ SHorizontalBox::Slot()
+							.FillWidth(1.0f)
+							.VAlign(VAlign_Center)
+							[
+								SNew(SBox)
+								.WidthOverride(148.0f)
+								.HeightOverride(42.0f)
+								[
+									SNew(SImage)
+									.Image(IconBrush.IsValid() ? IconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+									.ColorAndOpacity(IconBrush.IsValid()
+										? FLinearColor::White
+										: FLinearColor(0.65f, 0.68f, 0.68f, 0.24f))
+								]
+							]
+
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.VAlign(VAlign_Top)
+							.Padding(8.0f, -1.0f, 0.0f, 0.0f)
+							[
+								SNew(SVerticalBox)
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								[
+									SNew(STextBlock)
+									.Text(FText::Format(
+										FText::FromString(TEXT("DMG {0}")),
+										FText::AsNumber(WeaponData ? WeaponData->AttackStats.Damage : 0)))
+									.ColorAndOpacity(WeaponInfoAccentYellow)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+								]
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								[
+									SNew(STextBlock)
+									.Text(FText::Format(
+										FText::FromString(TEXT("RNG {0}")),
+										FText::AsNumber(WeaponData ? WeaponData->AttackStats.Range : 0)))
+									.ColorAndOpacity(WeaponInfoAccentYellow)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+								]
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								[
+									SNew(STextBlock)
+									.Text(FText::Format(
+										FText::FromString(TEXT("TU {0}")),
+										FText::AsNumber(WeaponData ? WeaponData->AttackStats.TimeUnitCost : 0)))
+									.ColorAndOpacity(WeaponInfoAccentYellow)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+								]
+							]
+						]
+					]
+				]
 			]
 		]
 	];
+}
 
-	if (Weapon.UsesAmmo() && Weapon.GetMaxAmmo() > 0)
+FReply SWeaponInfoSlateWidget::OnWeaponSlotClicked(AStrategyUnit* SelectedUnit, EStrategyWeaponSlot WeaponSlot)
+{
+	if (SelectedUnit && SelectedUnit->GetWeaponInSlot(WeaponSlot).WeaponData)
 	{
-		TSharedRef<SHorizontalBox> AmmoPips = SNew(SHorizontalBox);
-
-		const int32 PipCount = FMath::Clamp(Weapon.GetMaxAmmo(), 0, 12);
-		for (int32 Index = 0; Index < PipCount; ++Index)
-		{
-			const FLinearColor PipColor = Index < Weapon.CurrentAmmo ? PipFilled : PipEmpty;
-			AmmoPips->AddSlot()
-			.AutoWidth()
-			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-			[
-				SNew(SBox)
-				.WidthOverride(26.0f)
-				.HeightOverride(9.0f)
-				[
-					SNew(SBorder)
-					.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
-					.BorderBackgroundColor(PipColor)
-				]
-			];
-		}
-
-		WeaponListBox->AddSlot()
-		.AutoHeight()
-		.Padding(0.0f, -8.0f, 0.0f, 8.0f)
-		[
-			AmmoPips
-		];
+		SelectedUnit->SetActiveWeaponSlot(WeaponSlot);
+		SetUnit(SelectedUnit);
 	}
+
+	return FReply::Handled();
 }

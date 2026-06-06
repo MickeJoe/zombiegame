@@ -200,7 +200,10 @@ public:
 	
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
 	void ClearEquippedWeapons();
-	const FStrategyWeaponInstance& GetEquippedWeapon() const { return GetEquippedFireWeapon(); }
+	void SetActiveWeaponSlot(EStrategyWeaponSlot WeaponSlot);
+	EStrategyWeaponSlot GetActiveWeaponSlot() const { return ActiveWeaponSlot; }
+	const FStrategyWeaponInstance& GetEquippedWeapon() const;
+	const FStrategyWeaponInstance& GetWeaponInSlot(EStrategyWeaponSlot WeaponSlot) const;
 	const FStrategyWeaponInstance& GetEquippedFireWeapon() const;
 	const FStrategyWeaponInstance& GetEquippedMeleeWeapon() const;
 	
@@ -217,13 +220,13 @@ public:
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FStrategyWeaponInstance OneHandedFireWeapon;
+	FStrategyWeaponInstance PrimaryWeapon;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FStrategyWeaponInstance OneHandedMeleeWeapon;
+	FStrategyWeaponInstance SecondaryWeapon;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FStrategyWeaponInstance TwoHandedWeapon;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment")
+	EStrategyWeaponSlot ActiveWeaponSlot = EStrategyWeaponSlot::Primary;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
 	TSubclassOf<AActor> MeleeWeaponActorClass;

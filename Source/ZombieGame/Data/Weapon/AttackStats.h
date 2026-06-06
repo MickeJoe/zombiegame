@@ -53,7 +53,7 @@ struct FAttackStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 AmmoCost = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0", DisplayName="Time Unit Cost (TU)", ToolTip="How many time units this attack costs when using the weapon."))
 	int32 TimeUnitCost = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)

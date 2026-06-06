@@ -2451,8 +2451,19 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 	}
 
 	const FIntPoint AttackerCell = GridManager->WorldToGrid(Attacker->GetActorLocation());
-	if (GetShootableTargetsFromCell(Attacker, AttackerCell, 0).Contains(Target))
+	const FStrategyWeaponInstance& ActiveWeapon = Attacker->GetEquippedWeapon();
+	if (!ActiveWeapon.WeaponData)
 	{
+		return false;
+	}
+
+	if (ActiveWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	{
+		if (!GetShootableTargetsFromCell(Attacker, AttackerCell, 0).Contains(Target))
+		{
+			return false;
+		}
+
 		const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
 		if (!Context.AttackStats)
 		{
@@ -2470,7 +2481,7 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 		return true;
 	}
 
-	const FAttackStats* MeleeAttackStats = Attacker->GetMeleeAttackStats();
+	const FAttackStats* MeleeAttackStats = ActiveWeapon.GetAttackStats();
 	if (!MeleeAttackStats || Attacker->GetRemainingTimeUnits() < MeleeAttackStats->TimeUnitCost)
 	{
 		return false;
@@ -2485,8 +2496,7 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 		return false;
 	}
 
-	const FStrategyAttackContext Context =
-		UStrategyAttackResolver::MakeContextWithAttackStats(Attacker, Target, MeleeAttackStats);
+	const FStrategyAttackContext Context = UStrategyAttackResolver::MakeContext(Attacker, Target);
 	UStrategyAttackResolver::ResolveAndApply(Context);
 	Attacker->PlayMeleeAttackMontage();
 	Attacker->SpendMeleeAttackResources();
@@ -2668,9 +2678,9 @@ TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 		return Targets;
 	}
 
-	const FStrategyWeaponInstance& FireWeapon = Unit->GetEquippedFireWeapon();
-	const FAttackStats* AttackStats = FireWeapon.GetAttackStats();
-	if (!FireWeapon.WeaponData || !AttackStats)
+	const FStrategyWeaponInstance& ActiveWeapon = Unit->GetEquippedWeapon();
+	const FAttackStats* AttackStats = ActiveWeapon.GetAttackStats();
+	if (!ActiveWeapon.WeaponData || !AttackStats)
 	{
 		return Targets;
 	}
@@ -2681,10 +2691,10 @@ TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 		return Targets;
 	}
 
-	const int32 AmmoCost = FireWeapon.UsesAmmo()
+	const int32 AmmoCost = ActiveWeapon.UsesAmmo()
 		? FMath::Max(AttackStats->AmmoCost, 1)
 		: 0;
-	if (FireWeapon.UsesAmmo() && FireWeapon.CurrentAmmo < AmmoCost)
+	if (ActiveWeapon.UsesAmmo() && ActiveWeapon.CurrentAmmo < AmmoCost)
 	{
 		return Targets;
 	}

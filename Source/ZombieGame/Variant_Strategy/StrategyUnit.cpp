@@ -36,6 +36,11 @@ namespace
 	constexpr int32 DefaultSightRange = 28;
 	constexpr int32 DefaultMaxHealth = 8;
 	constexpr int32 DefaultMaxArmor = 2;
+
+	bool DoesWeaponMatchAttackType(const FStrategyWeaponInstance& Weapon, EStrategyWeaponAttackType AttackType)
+	{
+		return Weapon.WeaponData && Weapon.WeaponData->AttackType == AttackType;
+	}
 }
 
 PRAGMA_DISABLE_OPTIMIZATION
@@ -605,14 +610,21 @@ void AStrategyUnit::SpendMeleeAttackResources()
 
 void AStrategyUnit::SpendWeaponAttackResources()
 {
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+		? &PrimaryWeapon
+		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
-	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	if (DoesWeaponMatchAttackType(*ActiveWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &TwoHandedWeapon;
+		FireWeapon = ActiveWeapon;
 	}
-	else if (OneHandedFireWeapon.WeaponData)
+	else if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &OneHandedFireWeapon;
+		FireWeapon = &PrimaryWeapon;
+	}
+	else if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Fire))
+	{
+		FireWeapon = &SecondaryWeapon;
 	}
 
 	if (!FireWeapon)
@@ -652,14 +664,21 @@ void AStrategyUnit::ReloadWeapon()
 
 	SpendTimeUnits(1);
 
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+		? &PrimaryWeapon
+		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
-	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	if (DoesWeaponMatchAttackType(*ActiveWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &TwoHandedWeapon;
+		FireWeapon = ActiveWeapon;
 	}
-	else if (OneHandedFireWeapon.WeaponData)
+	else if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &OneHandedFireWeapon;
+		FireWeapon = &PrimaryWeapon;
+	}
+	else if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Fire))
+	{
+		FireWeapon = &SecondaryWeapon;
 	}
 
 	if (FireWeapon)
@@ -739,14 +758,21 @@ bool AStrategyUnit::TryFireOverwatchAt(AStrategyUnit* Target)
 		return false;
 	}
 
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+		? &PrimaryWeapon
+		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
-	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	if (DoesWeaponMatchAttackType(*ActiveWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &TwoHandedWeapon;
+		FireWeapon = ActiveWeapon;
 	}
-	else if (OneHandedFireWeapon.WeaponData)
+	else if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		FireWeapon = &OneHandedFireWeapon;
+		FireWeapon = &PrimaryWeapon;
+	}
+	else if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Fire))
+	{
+		FireWeapon = &SecondaryWeapon;
 	}
 
 	if (!FireWeapon || !FireWeapon->WeaponData)
@@ -1163,43 +1189,54 @@ void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
 		return;
 	}
 
-	if (WeaponData->Handedness == EStrategyWeaponHandedness::TwoHanded)
+	if (WeaponData->WeaponSlot == EStrategyWeaponSlot::Primary)
 	{
-		OneHandedFireWeapon = FStrategyWeaponInstance();
-		OneHandedMeleeWeapon = FStrategyWeaponInstance();
-		TwoHandedWeapon.Init(WeaponData);
+		PrimaryWeapon.Init(WeaponData);
 		return;
 	}
 
-	TwoHandedWeapon = FStrategyWeaponInstance();
-
-	if (WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
-	{
-		OneHandedFireWeapon.Init(WeaponData);
-	}
-	else
-	{
-		OneHandedMeleeWeapon.Init(WeaponData);
-	}
+	SecondaryWeapon.Init(WeaponData);
 }
 
 void AStrategyUnit::ClearEquippedWeapons()
 {
-	OneHandedFireWeapon = FStrategyWeaponInstance();
-	OneHandedMeleeWeapon = FStrategyWeaponInstance();
-	TwoHandedWeapon = FStrategyWeaponInstance();
+	PrimaryWeapon = FStrategyWeaponInstance();
+	SecondaryWeapon = FStrategyWeaponInstance();
+}
+
+void AStrategyUnit::SetActiveWeaponSlot(EStrategyWeaponSlot WeaponSlot)
+{
+	ActiveWeaponSlot = WeaponSlot;
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetEquippedWeapon() const
+{
+	return GetWeaponInSlot(ActiveWeaponSlot);
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetWeaponInSlot(EStrategyWeaponSlot WeaponSlot) const
+{
+	return WeaponSlot == EStrategyWeaponSlot::Primary
+		? PrimaryWeapon
+		: SecondaryWeapon;
 }
 
 const FStrategyWeaponInstance& AStrategyUnit::GetEquippedFireWeapon() const
 {
-	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Fire)
+	const FStrategyWeaponInstance& ActiveWeapon = GetWeaponInSlot(ActiveWeaponSlot);
+	if (DoesWeaponMatchAttackType(ActiveWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		return TwoHandedWeapon;
+		return ActiveWeapon;
 	}
 
-	if (OneHandedFireWeapon.WeaponData)
+	if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Fire))
 	{
-		return OneHandedFireWeapon;
+		return PrimaryWeapon;
+	}
+
+	if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Fire))
+	{
+		return SecondaryWeapon;
 	}
 
 	return EmptyWeaponInstance;
@@ -1207,14 +1244,20 @@ const FStrategyWeaponInstance& AStrategyUnit::GetEquippedFireWeapon() const
 
 const FStrategyWeaponInstance& AStrategyUnit::GetEquippedMeleeWeapon() const
 {
-	if (TwoHandedWeapon.WeaponData && TwoHandedWeapon.WeaponData->AttackType == EStrategyWeaponAttackType::Melee)
+	const FStrategyWeaponInstance& ActiveWeapon = GetWeaponInSlot(ActiveWeaponSlot);
+	if (DoesWeaponMatchAttackType(ActiveWeapon, EStrategyWeaponAttackType::Melee))
 	{
-		return TwoHandedWeapon;
+		return ActiveWeapon;
 	}
 
-	if (OneHandedMeleeWeapon.WeaponData)
+	if (DoesWeaponMatchAttackType(PrimaryWeapon, EStrategyWeaponAttackType::Melee))
 	{
-		return OneHandedMeleeWeapon;
+		return PrimaryWeapon;
+	}
+
+	if (DoesWeaponMatchAttackType(SecondaryWeapon, EStrategyWeaponAttackType::Melee))
+	{
+		return SecondaryWeapon;
 	}
 
 	return EmptyWeaponInstance;

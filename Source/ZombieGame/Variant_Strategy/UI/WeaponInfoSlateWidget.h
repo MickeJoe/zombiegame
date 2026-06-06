@@ -8,6 +8,7 @@ class AStrategyUnit;
 class SHorizontalBox;
 class SVerticalBox;
 struct FStrategyWeaponInstance;
+enum class EStrategyWeaponSlot : uint8;
 
 class SWeaponInfoSlateWidget : public SCompoundWidget
 {
@@ -19,7 +20,8 @@ public:
 	void SetUnit(AStrategyUnit* SelectedUnit);
 
 private:
-	void AddWeaponRow(const FStrategyWeaponInstance& Weapon);
+	void AddWeaponRow(AStrategyUnit* SelectedUnit, EStrategyWeaponSlot WeaponSlot, const FStrategyWeaponInstance& Weapon);
+	FReply OnWeaponSlotClicked(AStrategyUnit* SelectedUnit, EStrategyWeaponSlot WeaponSlot);
 
 	TSharedPtr<SVerticalBox> WeaponListBox;
 	TArray<TSharedPtr<FSlateBrush>> WeaponIconBrushes;
