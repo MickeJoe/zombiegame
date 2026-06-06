@@ -26,9 +26,6 @@ struct FAttackStats
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	int32 Range = 1;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Accuracy", meta=(ClampMin="0", ClampMax="100"))
 	int32 BaseHitChance = 65;
 
@@ -52,9 +49,6 @@ struct FAttackStats
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 AmmoCost = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0", DisplayName="Time Unit Cost (TU)", ToolTip="How many time units this attack costs when using the weapon."))
-	int32 TimeUnitCost = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bRequiresLineOfSight = true;

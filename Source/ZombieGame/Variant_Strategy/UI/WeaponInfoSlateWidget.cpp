@@ -1,5 +1,6 @@
 #include "UI/WeaponInfoSlateWidget.h"
 
+#include "Data/Item/EquippableItemData.h"
 #include "Data/Weapon/StrategyWeaponData.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
 #include "Variant_Strategy/StrategyUnit.h"
@@ -19,14 +20,14 @@ namespace
 	const FLinearColor WeaponCardSelectedBorderColor(0.0f, 0.92f, 0.88f, 1.0f);
 	const FLinearColor WeaponInfoAccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
 
-	FText GetWeaponDisplayName(UStrategyWeaponData* WeaponData)
+	FText GetItemDisplayName(UEquippableItemData* ItemData)
 	{
 		FString DisplayName = TEXT("Empty");
-		if (WeaponData)
+		if (ItemData)
 		{
-			DisplayName = WeaponData->DisplayName.IsEmpty()
-				? WeaponData->WeaponId.ToString()
-				: WeaponData->DisplayName.ToString();
+			DisplayName = ItemData->DisplayName.IsEmpty()
+				? ItemData->ItemId.ToString()
+				: ItemData->DisplayName.ToString();
 		}
 		DisplayName.ToUpperInline();
 		return FText::FromString(DisplayName);
@@ -71,12 +72,10 @@ void SWeaponInfoSlateWidget::SetUnit(AStrategyUnit* SelectedUnit)
 		return;
 	}
 
-	const FStrategyWeaponInstance& PrimaryWeapon = SelectedUnit->GetWeaponInSlot(EStrategyWeaponSlot::Primary);
-	const FStrategyWeaponInstance& SecondaryWeapon = SelectedUnit->GetWeaponInSlot(EStrategyWeaponSlot::Secondary);
+	UEquippableItemData* PrimaryItem = SelectedUnit->GetItemInSlot(EEquippableItemSlot::Primary);
+	UEquippableItemData* SecondaryItem = SelectedUnit->GetItemInSlot(EEquippableItemSlot::Secondary);
 
-	const bool bHasPrimaryWeapon = PrimaryWeapon.WeaponData != nullptr;
-	const bool bHasSecondaryWeapon = SecondaryWeapon.WeaponData != nullptr;
-	if (!bHasPrimaryWeapon && !bHasSecondaryWeapon)
+	if (!PrimaryItem && !SecondaryItem)
 	{
 		SetVisibility(EVisibility::Collapsed);
 		return;
@@ -84,13 +83,14 @@ void SWeaponInfoSlateWidget::SetUnit(AStrategyUnit* SelectedUnit)
 
 	SetVisibility(EVisibility::Visible);
 
-	AddWeaponRow(SelectedUnit, EStrategyWeaponSlot::Primary, PrimaryWeapon);
-	AddWeaponRow(SelectedUnit, EStrategyWeaponSlot::Secondary, SecondaryWeapon);
+	AddWeaponRow(SelectedUnit, EEquippableItemSlot::Primary, PrimaryItem, SelectedUnit->GetWeaponInSlot(EEquippableItemSlot::Primary));
+	AddWeaponRow(SelectedUnit, EEquippableItemSlot::Secondary, SecondaryItem, SelectedUnit->GetWeaponInSlot(EEquippableItemSlot::Secondary));
 }
 
 void SWeaponInfoSlateWidget::AddWeaponRow(
 	AStrategyUnit* SelectedUnit,
-	EStrategyWeaponSlot WeaponSlot,
+	EEquippableItemSlot WeaponSlot,
+	UEquippableItemData* ItemData,
 	const FStrategyWeaponInstance& Weapon)
 {
 	if (!WeaponListBox.IsValid())
@@ -102,10 +102,10 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 	const bool bSelected = SelectedUnit && SelectedUnit->GetActiveWeaponSlot() == WeaponSlot;
 
 	TSharedPtr<FSlateBrush> IconBrush;
-	if (WeaponData && WeaponData->Icon)
+	if (ItemData && ItemData->Icon)
 	{
 		IconBrush = MakeShared<FSlateBrush>();
-		IconBrush->SetResourceObject(WeaponData->Icon);
+		IconBrush->SetResourceObject(ItemData->Icon);
 		IconBrush->ImageSize = FVector2D(148.0f, 42.0f);
 		IconBrush->DrawAs = ESlateBrushDrawType::Image;
 		WeaponIconBrushes.Add(IconBrush);
@@ -141,8 +141,8 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 						.HAlign(HAlign_Center)
 						[
 							SNew(STextBlock)
-							.Text(GetWeaponDisplayName(WeaponData))
-							.ColorAndOpacity(WeaponData ? FLinearColor::White : FLinearColor(0.82f, 0.86f, 0.88f, 1.0f))
+							.Text(GetItemDisplayName(ItemData))
+							.ColorAndOpacity(ItemData ? FLinearColor::White : FLinearColor(0.82f, 0.86f, 0.88f, 1.0f))
 							.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
 						]
 
@@ -190,7 +190,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 									SNew(STextBlock)
 									.Text(FText::Format(
 										FText::FromString(TEXT("RNG {0}")),
-										FText::AsNumber(WeaponData ? WeaponData->AttackStats.Range : 0)))
+										FText::AsNumber(ItemData ? ItemData->Range : 0)))
 									.ColorAndOpacity(WeaponInfoAccentYellow)
 									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
 								]
@@ -200,7 +200,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 									SNew(STextBlock)
 									.Text(FText::Format(
 										FText::FromString(TEXT("TU {0}")),
-										FText::AsNumber(WeaponData ? WeaponData->AttackStats.TimeUnitCost : 0)))
+										FText::AsNumber(ItemData ? ItemData->TimeUnitCost : 0)))
 									.ColorAndOpacity(WeaponInfoAccentYellow)
 									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
 								]
@@ -213,9 +213,9 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 	];
 }
 
-FReply SWeaponInfoSlateWidget::OnWeaponSlotClicked(AStrategyUnit* SelectedUnit, EStrategyWeaponSlot WeaponSlot)
+FReply SWeaponInfoSlateWidget::OnWeaponSlotClicked(AStrategyUnit* SelectedUnit, EEquippableItemSlot WeaponSlot)
 {
-	if (SelectedUnit && SelectedUnit->GetWeaponInSlot(WeaponSlot).WeaponData)
+	if (SelectedUnit && SelectedUnit->GetItemInSlot(WeaponSlot))
 	{
 		SelectedUnit->SetActiveWeaponSlot(WeaponSlot);
 		SetUnit(SelectedUnit);

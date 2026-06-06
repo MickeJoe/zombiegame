@@ -5,6 +5,7 @@
 #include "UnitData.generated.h"
 
 class UStrategyWeaponData;
+class UEquippableItemData;
 class UTargetInfoWidget;
 class UEnemyUnitAI;
 
@@ -70,6 +71,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Equipment")
 	TArray<TObjectPtr<UStrategyWeaponData>> DefaultWeapons;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Equipment")
+	TArray<TObjectPtr<UEquippableItemData>> DefaultItems;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
 	TObjectPtr<UAnimMontage> HitReactMontage;

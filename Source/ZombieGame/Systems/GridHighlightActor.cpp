@@ -62,6 +62,9 @@ AGridHighlightActor::AGridHighlightActor()
 	HoveredEnemyCellLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("HoveredEnemyCellLines"));
 	HoveredEnemyCellLineBatch->SetupAttachment(RootComponent);
 
+	HoveredFriendlyCellLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("HoveredFriendlyCellLines"));
+	HoveredFriendlyCellLineBatch->SetupAttachment(RootComponent);
+
 	MovementDestinationText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("MovementDestinationText"));
 	MovementDestinationText->SetupAttachment(RootComponent);
 	MovementDestinationText->SetHorizontalAlignment(EHTA_Center);
@@ -349,6 +352,23 @@ void AGridHighlightActor::ShowHoveredEnemyCell(AGridManager* GridManager, const 
 void AGridHighlightActor::ClearHoveredEnemyCell()
 {
 	ClearBoundaryLines(HoveredEnemyCellLineBatch);
+}
+
+void AGridHighlightActor::ShowHoveredFriendlyCell(AGridManager* GridManager, const FIntPoint& Cell)
+{
+	ClearHoveredFriendlyCell();
+	DrawCellBox(
+		HoveredFriendlyCellLineBatch,
+		GridManager,
+		Cell,
+		HoveredFriendlyCellLineColor,
+		HoveredFriendlyCellLineThickness,
+		HoveredFriendlyCellLineHeightOffset);
+}
+
+void AGridHighlightActor::ClearHoveredFriendlyCell()
+{
+	ClearBoundaryLines(HoveredFriendlyCellLineBatch);
 }
 
 void AGridHighlightActor::DrawCellBox(

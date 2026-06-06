@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AIController.h"
+#include "Data/Item/EquippableItemData.h"
 #include "Data/Weapon/AttackStats.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
 #include "TargetingCameraMode.h"
@@ -25,6 +26,8 @@ class UChildActorComponent;
 class USphereComponent;
 class UUnitData;
 class UAnimMontage;
+class UEquippableItemData;
+class UMedicBagData;
 
 UENUM(BlueprintType)
 enum class EStrategyUnitTeam : uint8
@@ -197,15 +200,22 @@ public:
 	void ResetActionPoints();
 	
 	float ApplyDamage(const FWeaponDamage& WeaponDamage);
+	int32 ApplyHealing(int32 HealAmount);
 	
+	void EquipItem(UEquippableItemData* ItemData);
 	void EquipWeapon(UStrategyWeaponData* WeaponData);
 	void ClearEquippedWeapons();
-	void SetActiveWeaponSlot(EStrategyWeaponSlot WeaponSlot);
-	EStrategyWeaponSlot GetActiveWeaponSlot() const { return ActiveWeaponSlot; }
+	void SetActiveWeaponSlot(EEquippableItemSlot WeaponSlot);
+	EEquippableItemSlot GetActiveWeaponSlot() const { return ActiveWeaponSlot; }
+	UEquippableItemData* GetEquippedItem() const;
+	UEquippableItemData* GetItemInSlot(EEquippableItemSlot ItemSlot) const;
 	const FStrategyWeaponInstance& GetEquippedWeapon() const;
-	const FStrategyWeaponInstance& GetWeaponInSlot(EStrategyWeaponSlot WeaponSlot) const;
+	const FStrategyWeaponInstance& GetWeaponInSlot(EEquippableItemSlot WeaponSlot) const;
 	const FStrategyWeaponInstance& GetEquippedFireWeapon() const;
 	const FStrategyWeaponInstance& GetEquippedMeleeWeapon() const;
+	UMedicBagData* GetEquippedMedicBag() const;
+	bool CanUseMedicBagOn(const AStrategyUnit* Target) const;
+	bool UseMedicBagOn(AStrategyUnit* Target);
 	
 	UTargetInfoWidget* GetTargetInfoWidget() const { return TargetInfoWidget; }
 	
@@ -219,14 +229,20 @@ public:
 	FOnUnitMoveCompletedDelegate OnMoveCompleted;
 
 protected:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(DisplayName="Primary Weapon / Item"))
+	TObjectPtr<UEquippableItemData> PrimaryItem;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(DisplayName="Secondary Weapon / Item"))
+	TObjectPtr<UEquippableItemData> SecondaryItem;
+
+	UPROPERTY(Transient)
 	FStrategyWeaponInstance PrimaryWeapon;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(Transient)
 	FStrategyWeaponInstance SecondaryWeapon;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment")
-	EStrategyWeaponSlot ActiveWeaponSlot = EStrategyWeaponSlot::Primary;
+	EEquippableItemSlot ActiveWeaponSlot = EEquippableItemSlot::Primary;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
 	TSubclassOf<AActor> MeleeWeaponActorClass;
@@ -300,6 +316,7 @@ protected:
 	TObjectPtr<UTargetInfoWidget> TargetInfoWidget;
 
 private:
+	void RebuildEquippedWeaponInstances();
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
 	void UpdateMeleeWeaponVisual();

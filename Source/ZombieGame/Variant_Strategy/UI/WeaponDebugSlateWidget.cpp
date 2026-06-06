@@ -143,14 +143,14 @@ void SWeaponDebugSlateWidget::RebuildWeaponList()
 		}
 
 		const FText WeaponName = Weapon->DisplayName.IsEmpty()
-			? FText::FromName(Weapon->WeaponId)
+			? FText::FromName(Weapon->ItemId)
 			: Weapon->DisplayName;
 
 		const FText WeaponDetails = FText::Format(
 			NSLOCTEXT("WeaponDebug", "WeaponDetails", "{0} | Damage {1} | Range {2}"),
 			WeaponName,
 			FText::AsNumber(Weapon->AttackStats.Damage),
-			FText::AsNumber(Weapon->AttackStats.Range));
+			FText::AsNumber(Weapon->Range));
 
 		WeaponListBox->AddSlot()
 		.AutoHeight()

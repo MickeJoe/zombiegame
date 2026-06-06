@@ -16,5 +16,5 @@ public:
 	TArray<TObjectPtr<UStrategyWeaponData>> Weapons;
 
 	UFUNCTION(BlueprintPure, Category="Weapons")
-	UStrategyWeaponData* FindWeaponById(FName WeaponId) const;
+	UStrategyWeaponData* FindWeaponById(FName ItemId) const;
 };

@@ -430,6 +430,7 @@ protected:
 	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost);
 	void UpdateShootTargetHoverIndicator();
 	bool TryAttackHoveredEnemy();
+	bool TrySelectOrUseMedicBag();
 	bool TryExecuteDirectAttack(AStrategyUnit* Attacker, AStrategyUnit* Target);
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
 	void UpdateOverwatchPlacementPreview();
@@ -465,7 +466,7 @@ public:
 	void HideWeaponDebugMenu();
 
 	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
-	void DebugEquipWeapon(FName WeaponId);
+	void DebugEquipWeapon(FName ItemId);
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
@@ -536,9 +537,10 @@ private:
 	void HandleDebugWeaponPicked(UStrategyWeaponData* WeaponData);
 	TArray<AStrategyUnit*> GetWeaponDebugTargetUnits() const;
 	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
-	UStrategyWeaponData* FindDebugWeapon(FName WeaponId) const;
+	UStrategyWeaponData* FindDebugWeapon(FName ItemId) const;
 	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost) const;
 	AStrategyUnit* GetHoveredStrategyUnit();
+	void ClearPendingMedicBagTarget();
 
 	TSharedPtr<SWeaponInfoSlateWidget> WeaponInfoSlateWidget;
 	TSharedPtr<SWeaponDebugSlateWidget> WeaponDebugSlateWidget;
@@ -548,5 +550,6 @@ private:
 	TSharedPtr<FSlateBrush> ShootTargetHoverHitChanceIconBrush;
 	TSharedPtr<FSlateBrush> ShootTargetHoverActionPointIconBrush;
 	TObjectPtr<AStrategyUnit> LastShootTargetHoverUnit = nullptr;
+	TObjectPtr<AStrategyUnit> PendingMedicBagTarget = nullptr;
 	
 };

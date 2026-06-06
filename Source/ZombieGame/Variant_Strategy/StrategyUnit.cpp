@@ -6,6 +6,8 @@
 #include "../../Enemy_AI/EnemyUnitAI.h"
 #include "Player/AIStrategySide.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
+#include "Data/Item/EquippableItemData.h"
+#include "Data/Item/MedicBagData.h"
 #include "Data/Weapon/StrategyWeaponData.h"
 #include "AIController.h"
 #include "StrategyGameMode.h"
@@ -121,6 +123,7 @@ void AStrategyUnit::OnConstruction(const FTransform& Transform)
 
 	ApplyTargetingCameraSettings();
 	ConfigureVisualComponentsForTacticalMovement();
+	RebuildEquippedWeaponInstances();
 	UpdateMeleeWeaponVisual();
 }
 
@@ -130,6 +133,7 @@ void AStrategyUnit::BeginPlay()
 
 	ApplyTargetingCameraSettings();
 	ConfigureVisualComponentsForTacticalMovement();
+	RebuildEquippedWeaponInstances();
 	UpdateMeleeWeaponVisual();
 
 
@@ -152,7 +156,7 @@ void AStrategyUnit::BeginPlay()
 		}
 	}
 
-	if (UnitData && UnitData->DefaultWeapon && !GetEquippedFireWeapon().WeaponData && !GetEquippedMeleeWeapon().WeaponData)
+	if (UnitData && UnitData->DefaultWeapon && !PrimaryItem && !SecondaryItem)
 	{
 		EquipWeapon(UnitData->DefaultWeapon);
 	}
@@ -161,7 +165,20 @@ void AStrategyUnit::BeginPlay()
 	{
 		for (UStrategyWeaponData* DefaultWeapon : UnitData->DefaultWeapons)
 		{
-			EquipWeapon(DefaultWeapon);
+			if (DefaultWeapon
+				&& !GetItemInSlot(DefaultWeapon->EquipmentSlot))
+			{
+				EquipWeapon(DefaultWeapon);
+			}
+		}
+
+		for (UEquippableItemData* DefaultItem : UnitData->DefaultItems)
+		{
+			if (DefaultItem
+				&& !GetItemInSlot(DefaultItem->EquipmentSlot))
+			{
+				EquipItem(DefaultItem);
+			}
 		}
 	}
 
@@ -458,6 +475,19 @@ float AStrategyUnit::ApplyDamage(const FWeaponDamage& WeaponDamage)
 	return 0.0f;
 }
 
+int32 AStrategyUnit::ApplyHealing(int32 HealAmount)
+{
+	if (HealAmount <= 0 || CurrentHealth <= 0)
+	{
+		return 0;
+	}
+
+	const int32 OldHealth = CurrentHealth;
+	CurrentHealth = FMath::Clamp(CurrentHealth + HealAmount, 0, GetMaxHealth());
+	UpdateStatusBar();
+	return CurrentHealth - OldHealth;
+}
+
 void AStrategyUnit::ScheduleDeathRemoval(float DelaySeconds)
 {
 	if (bDeathRemovalScheduled)
@@ -505,7 +535,14 @@ bool AStrategyUnit::CanMeleeAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (GetRemainingTimeUnits() < AttackStats->TimeUnitCost)
+	const FStrategyWeaponInstance& MeleeWeapon = GetEquippedMeleeWeapon();
+	const int32 MeleeTimeUnitCost = MeleeWeapon.WeaponData
+		? MeleeWeapon.WeaponData->TimeUnitCost
+		: 1;
+	const int32 MeleeRange = MeleeWeapon.WeaponData
+		? FMath::Max(MeleeWeapon.WeaponData->Range, 1)
+		: 1;
+	if (GetRemainingTimeUnits() < MeleeTimeUnitCost)
 	{
 		return false;
 	}
@@ -524,7 +561,7 @@ bool AStrategyUnit::CanMeleeAttack(AAIStrategySide* EnemySide) const
 			FMath::Abs(MyCell.X - EnemyCell.X) +
 			FMath::Abs(MyCell.Y - EnemyCell.Y);
 
-		if (Distance <= AttackStats->Range)
+		if (Distance <= MeleeRange)
 		{
 			return true;
 		}
@@ -559,7 +596,11 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 		return false;
 	}
 
-	if (GetRemainingTimeUnits() < AttackStats->TimeUnitCost)
+	const FStrategyWeaponInstance& MeleeWeapon = GetEquippedMeleeWeapon();
+	const int32 MeleeTimeUnitCost = MeleeWeapon.WeaponData
+		? MeleeWeapon.WeaponData->TimeUnitCost
+		: 1;
+	if (GetRemainingTimeUnits() < MeleeTimeUnitCost)
 	{
 		return false;
 	}
@@ -574,7 +615,7 @@ bool AStrategyUnit::CanWeaponAttack(AAIStrategySide* EnemySide) const
 
 	// 3. Range check
 	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
-	const int32 Range = AttackStats->Range;
+	const int32 Range = FMath::Max(FireWeapon.WeaponData->Range, 1);
 
 	for (AStrategyUnit* Enemy : EnemySide->Units) // eller EnemySide->Units
 	{
@@ -605,12 +646,16 @@ void AStrategyUnit::SpendMeleeAttackResources()
 		return;
 	}
 
-	SpendTimeUnits(AttackStats->TimeUnitCost);
+	const FStrategyWeaponInstance& MeleeWeapon = GetEquippedMeleeWeapon();
+	const int32 MeleeTimeUnitCost = MeleeWeapon.WeaponData
+		? MeleeWeapon.WeaponData->TimeUnitCost
+		: 1;
+	SpendTimeUnits(MeleeTimeUnitCost);
 }
 
 void AStrategyUnit::SpendWeaponAttackResources()
 {
-	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EEquippableItemSlot::Primary
 		? &PrimaryWeapon
 		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
@@ -638,7 +683,7 @@ void AStrategyUnit::SpendWeaponAttackResources()
 		return;
 	}
 
-	SpendTimeUnits(AttackStats->TimeUnitCost);
+	SpendTimeUnits(FireWeapon->WeaponData->TimeUnitCost);
 
 	if (FireWeapon->UsesAmmo())
 	{
@@ -664,7 +709,7 @@ void AStrategyUnit::ReloadWeapon()
 
 	SpendTimeUnits(1);
 
-	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EEquippableItemSlot::Primary
 		? &PrimaryWeapon
 		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
@@ -699,7 +744,7 @@ int32 AStrategyUnit::GetOverwatchRange() const
 {
 	if (const FAttackStats* AttackStats = GetEquippedFireWeapon().GetAttackStats())
 	{
-		return FMath::Max(AttackStats->Range, 1);
+		return FMath::Max(GetEquippedFireWeapon().WeaponData->Range, 1);
 	}
 
 	return 1;
@@ -758,7 +803,7 @@ bool AStrategyUnit::TryFireOverwatchAt(AStrategyUnit* Target)
 		return false;
 	}
 
-	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EStrategyWeaponSlot::Primary
+	FStrategyWeaponInstance* ActiveWeapon = ActiveWeaponSlot == EEquippableItemSlot::Primary
 		? &PrimaryWeapon
 		: &SecondaryWeapon;
 	FStrategyWeaponInstance* FireWeapon = nullptr;
@@ -1090,7 +1135,7 @@ TArray<AStrategyUnit*> AStrategyUnit::GetEnemiesInRange() const
 	}
 
 	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
-	const int32 Range = AttackStats->Range;
+	const int32 Range = FMath::Max(FireWeapon.WeaponData->Range, 1);
 
 	for (AStrategyUnit* Enemy : EnemySide->Units)
 	{
@@ -1137,7 +1182,10 @@ TArray<AStrategyUnit*> AStrategyUnit::GetMeleeEnemiesInRange() const
 	}
 
 	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
-	const int32 Range = AttackStats->Range;
+	const FStrategyWeaponInstance& MeleeWeapon = GetEquippedMeleeWeapon();
+	const int32 Range = MeleeWeapon.WeaponData
+		? FMath::Max(MeleeWeapon.WeaponData->Range, 1)
+		: 1;
 
 	for (AStrategyUnit* Enemy : EnemySide->Units)
 	{
@@ -1182,29 +1230,59 @@ void AStrategyUnit::UpdateStatusBar()
 		GetMaxArmor());
 }
 
+void AStrategyUnit::EquipItem(UEquippableItemData* ItemData)
+{
+	if (!ItemData)
+	{
+		return;
+	}
+
+	FStrategyWeaponInstance* WeaponSlot = ItemData->EquipmentSlot == EEquippableItemSlot::Primary
+		? &PrimaryWeapon
+		: &SecondaryWeapon;
+	TObjectPtr<UEquippableItemData>& ItemSlot = ItemData->EquipmentSlot == EEquippableItemSlot::Primary
+		? PrimaryItem
+		: SecondaryItem;
+
+	ItemSlot = ItemData;
+	*WeaponSlot = FStrategyWeaponInstance();
+
+	if (UStrategyWeaponData* WeaponData = Cast<UStrategyWeaponData>(ItemData))
+	{
+		WeaponSlot->Init(WeaponData);
+	}
+}
+
+void AStrategyUnit::RebuildEquippedWeaponInstances()
+{
+	PrimaryWeapon = FStrategyWeaponInstance();
+	SecondaryWeapon = FStrategyWeaponInstance();
+
+	if (UStrategyWeaponData* PrimaryWeaponData = Cast<UStrategyWeaponData>(PrimaryItem))
+	{
+		PrimaryWeapon.Init(PrimaryWeaponData);
+	}
+
+	if (UStrategyWeaponData* SecondaryWeaponData = Cast<UStrategyWeaponData>(SecondaryItem))
+	{
+		SecondaryWeapon.Init(SecondaryWeaponData);
+	}
+}
+
 void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
 {
-	if (!WeaponData)
-	{
-		return;
-	}
-
-	if (WeaponData->WeaponSlot == EStrategyWeaponSlot::Primary)
-	{
-		PrimaryWeapon.Init(WeaponData);
-		return;
-	}
-
-	SecondaryWeapon.Init(WeaponData);
+	EquipItem(WeaponData);
 }
 
 void AStrategyUnit::ClearEquippedWeapons()
 {
+	PrimaryItem = nullptr;
+	SecondaryItem = nullptr;
 	PrimaryWeapon = FStrategyWeaponInstance();
 	SecondaryWeapon = FStrategyWeaponInstance();
 }
 
-void AStrategyUnit::SetActiveWeaponSlot(EStrategyWeaponSlot WeaponSlot)
+void AStrategyUnit::SetActiveWeaponSlot(EEquippableItemSlot WeaponSlot)
 {
 	ActiveWeaponSlot = WeaponSlot;
 }
@@ -1214,9 +1292,21 @@ const FStrategyWeaponInstance& AStrategyUnit::GetEquippedWeapon() const
 	return GetWeaponInSlot(ActiveWeaponSlot);
 }
 
-const FStrategyWeaponInstance& AStrategyUnit::GetWeaponInSlot(EStrategyWeaponSlot WeaponSlot) const
+UEquippableItemData* AStrategyUnit::GetEquippedItem() const
 {
-	return WeaponSlot == EStrategyWeaponSlot::Primary
+	return GetItemInSlot(ActiveWeaponSlot);
+}
+
+UEquippableItemData* AStrategyUnit::GetItemInSlot(EEquippableItemSlot ItemSlot) const
+{
+	return ItemSlot == EEquippableItemSlot::Primary
+		? PrimaryItem
+		: SecondaryItem;
+}
+
+const FStrategyWeaponInstance& AStrategyUnit::GetWeaponInSlot(EEquippableItemSlot WeaponSlot) const
+{
+	return WeaponSlot == EEquippableItemSlot::Primary
 		? PrimaryWeapon
 		: SecondaryWeapon;
 }
@@ -1261,6 +1351,55 @@ const FStrategyWeaponInstance& AStrategyUnit::GetEquippedMeleeWeapon() const
 	}
 
 	return EmptyWeaponInstance;
+}
+
+UMedicBagData* AStrategyUnit::GetEquippedMedicBag() const
+{
+	return Cast<UMedicBagData>(GetEquippedItem());
+}
+
+bool AStrategyUnit::CanUseMedicBagOn(const AStrategyUnit* Target) const
+{
+	const UMedicBagData* MedicBag = GetEquippedMedicBag();
+	if (!GridManager || !MedicBag || !IsValid(Target))
+	{
+		return false;
+	}
+
+	if (GetCurrentHealth() <= 0
+		|| Target->GetCurrentHealth() <= 0
+		|| Target->GetCurrentHealth() >= Target->GetMaxHealth()
+		|| Target->GetStrategyUnitTeam() != GetStrategyUnitTeam()
+		|| GetRemainingTimeUnits() < MedicBag->TimeUnitCost)
+	{
+		return false;
+	}
+
+	const FIntPoint MyCell = GridManager->WorldToGrid(GetActorLocation());
+	const FIntPoint TargetCell = GridManager->WorldToGrid(Target->GetActorLocation());
+	const int32 Distance =
+		FMath::Abs(MyCell.X - TargetCell.X) +
+		FMath::Abs(MyCell.Y - TargetCell.Y);
+
+	return Distance <= FMath::Max(MedicBag->Range, 0);
+}
+
+bool AStrategyUnit::UseMedicBagOn(AStrategyUnit* Target)
+{
+	UMedicBagData* MedicBag = GetEquippedMedicBag();
+	if (!MedicBag || !CanUseMedicBagOn(Target))
+	{
+		return false;
+	}
+
+	const int32 HealedAmount = Target->ApplyHealing(MedicBag->HealAmount);
+	if (HealedAmount <= 0)
+	{
+		return false;
+	}
+
+	SpendTimeUnits(MedicBag->TimeUnitCost);
+	return true;
 }
 
 AStrategyGameMode* AStrategyUnit::GetStrategyGameMode() const

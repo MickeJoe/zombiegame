@@ -130,6 +130,15 @@ public:
 	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Enemy Cell")
 	float HoveredEnemyCellLineHeightOffset = 24.0f;
 
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Friendly Cell")
+	FLinearColor HoveredFriendlyCellLineColor = FLinearColor(0.0f, 1.0f, 0.2f, 1.0f);
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Friendly Cell", meta=(ClampMin="0.0"))
+	float HoveredFriendlyCellLineThickness = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Friendly Cell")
+	float HoveredFriendlyCellLineHeightOffset = 24.0f;
+
 	UPROPERTY(EditAnywhere, Category="Highlight|Cover")
 	TObjectPtr<UTexture2D> HalfCoverTexture;
 
@@ -187,6 +196,8 @@ public:
 	void ClearMovementDestination();
 	void ShowHoveredEnemyCell(AGridManager* GridManager, const FIntPoint& Cell);
 	void ClearHoveredEnemyCell();
+	void ShowHoveredFriendlyCell(AGridManager* GridManager, const FIntPoint& Cell);
+	void ClearHoveredFriendlyCell();
 	void ShowCoverIndicators(const TArray<FGridCoverIndicator>& Indicators);
 	void ClearCoverIndicators();
 
@@ -220,6 +231,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<ULineBatchComponent> HoveredEnemyCellLineBatch;
+
+	UPROPERTY()
+	TObjectPtr<ULineBatchComponent> HoveredFriendlyCellLineBatch;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> CoverIndicatorPool;

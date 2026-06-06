@@ -453,6 +453,11 @@ void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 			return;
 		}
 
+		if (TrySelectOrUseMedicBag())
+		{
+			return;
+		}
+
 		if (!GetHoveredStrategyUnit() && ControlledUnits.Num() > 0 && GridManager)
 		{
 			const FIntPoint ClickedCell = GridManager->WorldToGrid(CachedInteraction);
@@ -805,7 +810,9 @@ void AStrategyPlayerController::DoDeselectAllCommand()
 		HighlightActor->ClearSelectedCell();
 		HighlightActor->ClearMovementDestination();
 		HighlightActor->ClearCoverIndicators();
+		HighlightActor->ClearHoveredFriendlyCell();
 	}
+	PendingMedicBagTarget = nullptr;
 	LastMovementPreviewCell = FIntPoint(TNumericLimits<int32>::Min(), TNumericLimits<int32>::Min());
 	LastMovementPreviewUnit = nullptr;
 	PendingMoveCell = FIntPoint::ZeroValue;
@@ -2189,6 +2196,10 @@ void AStrategyPlayerController::ClearShootTargetHoverIndicator()
 	if (HighlightActor)
 	{
 		HighlightActor->ClearHoveredEnemyCell();
+		if (!PendingMedicBagTarget)
+		{
+			HighlightActor->ClearHoveredFriendlyCell();
+		}
 	}
 }
 
@@ -2247,6 +2258,15 @@ AStrategyUnit* AStrategyPlayerController::GetHoveredStrategyUnit()
 	return nullptr;
 }
 
+void AStrategyPlayerController::ClearPendingMedicBagTarget()
+{
+	PendingMedicBagTarget = nullptr;
+	if (HighlightActor)
+	{
+		HighlightActor->ClearHoveredFriendlyCell();
+	}
+}
+
 void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 {
 	if (!GEngine || !GEngine->GameViewport || !GridManager)
@@ -2267,7 +2287,34 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 		SelectedUnit = ControlledUnits[0];
 	}
 
+	if (!IsValid(SelectedUnit)
+		|| !SelectedUnit->GetEquippedMedicBag()
+		|| (PendingMedicBagTarget && !SelectedUnit->CanUseMedicBagOn(PendingMedicBagTarget)))
+	{
+		ClearPendingMedicBagTarget();
+	}
+
 	AStrategyUnit* HoveredUnit = GetHoveredStrategyUnit();
+
+	if (IsValid(SelectedUnit)
+		&& IsSelectableUnit(SelectedUnit)
+		&& SelectedUnit->GetCurrentHealth() > 0
+		&& IsValid(HoveredUnit)
+		&& SelectedUnit->GetEquippedMedicBag()
+		&& SelectedUnit->CanUseMedicBagOn(HoveredUnit))
+	{
+		if (HighlightActor && PendingMedicBagTarget != HoveredUnit)
+		{
+			HighlightActor->ShowHoveredFriendlyCell(
+				GridManager,
+				GridManager->WorldToGrid(HoveredUnit->GetActorLocation()));
+		}
+	}
+	else if (!PendingMedicBagTarget && HighlightActor)
+	{
+		HighlightActor->ClearHoveredFriendlyCell();
+	}
+
 	if (!IsValid(SelectedUnit)
 		|| !IsSelectableUnit(SelectedUnit)
 		|| SelectedUnit->GetCurrentHealth() <= 0
@@ -2321,12 +2368,19 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 		return;
 	}
 
+	const FStrategyWeaponInstance& ActiveWeapon = SelectedUnit->GetEquippedWeapon();
+	if (!ActiveWeapon.WeaponData)
+	{
+		ClearShootTargetHoverIndicator();
+		return;
+	}
+
 	const int32 HitChance = UStrategyAttackResolver::CalculateHitChance(Context);
 	const int32 RemainingTimeUnitsAfterShot =
 		FMath::Max(
 			SelectedUnit->GetRemainingTimeUnits()
 			- MovementTimeUnitCost
-			- Context.AttackStats->TimeUnitCost,
+			- ActiveWeapon.WeaponData->TimeUnitCost,
 			0);
 
 	FVector2D ScreenPos;
@@ -2443,6 +2497,58 @@ bool AStrategyPlayerController::TryAttackHoveredEnemy()
 	return TryExecuteDirectAttack(SelectedUnit, HoveredUnit);
 }
 
+bool AStrategyPlayerController::TrySelectOrUseMedicBag()
+{
+	if (!GridManager)
+	{
+		return false;
+	}
+
+	AStrategyUnit* SelectedUnit = ControlledUnits.Num() == 1 ? ControlledUnits[0] : TargetUnit;
+	if (!IsValid(SelectedUnit) && ControlledUnits.Num() > 0)
+	{
+		SelectedUnit = ControlledUnits[0];
+	}
+
+	AStrategyUnit* HoveredUnit = GetHoveredStrategyUnit();
+	if (!IsValid(SelectedUnit)
+		|| !IsSelectableUnit(SelectedUnit)
+		|| SelectedUnit->GetCurrentHealth() <= 0
+		|| !IsValid(HoveredUnit)
+		|| !SelectedUnit->GetEquippedMedicBag()
+		|| !SelectedUnit->CanUseMedicBagOn(HoveredUnit))
+	{
+		return false;
+	}
+
+	if (PendingMedicBagTarget == HoveredUnit)
+	{
+		const bool bUsed = SelectedUnit->UseMedicBagOn(HoveredUnit);
+		ClearPendingMedicBagTarget();
+
+		if (bUsed)
+		{
+			RefreshActionBar();
+			RefreshPlayerUnitRoster();
+			RefreshWeaponInfoPanel();
+			RefreshShootableTargetIcons();
+			UpdateMovementHighlights();
+		}
+
+		return bUsed;
+	}
+
+	PendingMedicBagTarget = HoveredUnit;
+	if (HighlightActor)
+	{
+		HighlightActor->ShowHoveredFriendlyCell(
+			GridManager,
+			GridManager->WorldToGrid(HoveredUnit->GetActorLocation()));
+	}
+
+	return true;
+}
+
 bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, AStrategyUnit* Target)
 {
 	if (!GridManager || !IsValid(Attacker) || !IsValid(Target))
@@ -2482,7 +2588,10 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 	}
 
 	const FAttackStats* MeleeAttackStats = ActiveWeapon.GetAttackStats();
-	if (!MeleeAttackStats || Attacker->GetRemainingTimeUnits() < MeleeAttackStats->TimeUnitCost)
+	const int32 MeleeTimeUnitCost = ActiveWeapon.WeaponData
+		? ActiveWeapon.WeaponData->TimeUnitCost
+		: 1;
+	if (!MeleeAttackStats || Attacker->GetRemainingTimeUnits() < MeleeTimeUnitCost)
 	{
 		return false;
 	}
@@ -2491,7 +2600,10 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 	const int32 Distance =
 		FMath::Abs(AttackerCell.X - TargetCell.X)
 		+ FMath::Abs(AttackerCell.Y - TargetCell.Y);
-	if (Distance > MeleeAttackStats->Range)
+	const int32 MeleeRange = ActiveWeapon.WeaponData
+		? FMath::Max(ActiveWeapon.WeaponData->Range, 1)
+		: 1;
+	if (Distance > MeleeRange)
 	{
 		return false;
 	}
@@ -2686,7 +2798,7 @@ TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 	}
 
 	const int32 RemainingTimeUnitsAfterMove = Unit->GetRemainingTimeUnits() - FMath::Max(MovementTimeUnitCost, 0);
-	if (RemainingTimeUnitsAfterMove < AttackStats->TimeUnitCost)
+	if (RemainingTimeUnitsAfterMove < ActiveWeapon.WeaponData->TimeUnitCost)
 	{
 		return Targets;
 	}
@@ -2720,7 +2832,7 @@ TArray<AStrategyUnit*> AStrategyPlayerController::GetShootableTargetsFromCell(
 			FMath::Abs(SourceCell.X - TargetCell.X)
 			+ FMath::Abs(SourceCell.Y - TargetCell.Y);
 
-		if (Distance <= AttackStats->Range)
+		if (Distance <= FMath::Max(ActiveWeapon.WeaponData->Range, 1))
 		{
 			Targets.Add(Target);
 		}
@@ -2965,12 +3077,12 @@ void AStrategyPlayerController::HideWeaponDebugMenu()
 	}
 }
 
-void AStrategyPlayerController::DebugEquipWeapon(FName WeaponId)
+void AStrategyPlayerController::DebugEquipWeapon(FName ItemId)
 {
-	UStrategyWeaponData* Weapon = FindDebugWeapon(WeaponId);
+	UStrategyWeaponData* Weapon = FindDebugWeapon(ItemId);
 	if (!Weapon)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("DebugEquipWeapon failed: no weapon with id '%s'"), *WeaponId.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("DebugEquipWeapon failed: no item with id '%s'"), *ItemId.ToString());
 		return;
 	}
 
@@ -3127,19 +3239,19 @@ TArray<UStrategyWeaponData*> AStrategyPlayerController::GetDebugWeapons() const
 
 	Weapons.Sort([](const UStrategyWeaponData& Left, const UStrategyWeaponData& Right)
 	{
-		const FString LeftName = Left.DisplayName.IsEmpty() ? Left.WeaponId.ToString() : Left.DisplayName.ToString();
-		const FString RightName = Right.DisplayName.IsEmpty() ? Right.WeaponId.ToString() : Right.DisplayName.ToString();
+		const FString LeftName = Left.DisplayName.IsEmpty() ? Left.ItemId.ToString() : Left.DisplayName.ToString();
+		const FString RightName = Right.DisplayName.IsEmpty() ? Right.ItemId.ToString() : Right.DisplayName.ToString();
 		return LeftName < RightName;
 	});
 
 	return Weapons;
 }
 
-UStrategyWeaponData* AStrategyPlayerController::FindDebugWeapon(FName WeaponId) const
+UStrategyWeaponData* AStrategyPlayerController::FindDebugWeapon(FName ItemId) const
 {
 	if (WeaponDatabase)
 	{
-		if (UStrategyWeaponData* Weapon = WeaponDatabase->FindWeaponById(WeaponId))
+		if (UStrategyWeaponData* Weapon = WeaponDatabase->FindWeaponById(ItemId))
 		{
 			return Weapon;
 		}
@@ -3147,7 +3259,7 @@ UStrategyWeaponData* AStrategyPlayerController::FindDebugWeapon(FName WeaponId) 
 
 	for (UStrategyWeaponData* Weapon : GetDebugWeapons())
 	{
-		if (Weapon && Weapon->WeaponId == WeaponId)
+		if (Weapon && Weapon->ItemId == ItemId)
 		{
 			return Weapon;
 		}
