@@ -53,8 +53,14 @@ AGridHighlightActor::AGridHighlightActor()
 	MovementPathLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("MovementPathLines"));
 	MovementPathLineBatch->SetupAttachment(RootComponent);
 
+	SelectedCellLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("SelectedCellLines"));
+	SelectedCellLineBatch->SetupAttachment(RootComponent);
+
 	MovementDestinationLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("MovementDestinationLines"));
 	MovementDestinationLineBatch->SetupAttachment(RootComponent);
+
+	HoveredEnemyCellLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("HoveredEnemyCellLines"));
+	HoveredEnemyCellLineBatch->SetupAttachment(RootComponent);
 
 	MovementDestinationText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("MovementDestinationText"));
 	MovementDestinationText->SetupAttachment(RootComponent);
@@ -246,6 +252,23 @@ void AGridHighlightActor::ClearMovementPath()
 	ClearBoundaryLines(MovementPathLineBatch);
 }
 
+void AGridHighlightActor::ShowSelectedCell(AGridManager* GridManager, const FIntPoint& Cell)
+{
+	ClearSelectedCell();
+	DrawCellBox(
+		SelectedCellLineBatch,
+		GridManager,
+		Cell,
+		SelectedCellLineColor,
+		SelectedCellLineThickness,
+		SelectedCellLineHeightOffset);
+}
+
+void AGridHighlightActor::ClearSelectedCell()
+{
+	ClearBoundaryLines(SelectedCellLineBatch);
+}
+
 void AGridHighlightActor::ShowMovementDestination(
 	AGridManager* GridManager,
 	const FIntPoint& Cell,
@@ -271,25 +294,13 @@ void AGridHighlightActor::ShowMovementDestination(
 		GroundLocation.Z = NavigationLocation.Z;
 	}
 
-	const float HalfSize = GridManager->CellSize * 0.5f;
-	const FVector Center = GroundLocation + FVector(0.0f, 0.0f, MovementDestinationLineHeightOffset);
-	const FVector Corners[] =
-	{
-		Center + FVector(-HalfSize, -HalfSize, 0.0f),
-		Center + FVector(HalfSize, -HalfSize, 0.0f),
-		Center + FVector(HalfSize, HalfSize, 0.0f),
-		Center + FVector(-HalfSize, HalfSize, 0.0f)
-	};
-
-	for (int32 Index = 0; Index < 4; ++Index)
-	{
-		MovementDestinationLineBatch->DrawLine(
-			Corners[Index],
-			Corners[(Index + 1) % 4],
-			MovementDestinationLineColor,
-			0,
-			MovementDestinationLineThickness);
-	}
+	DrawCellBox(
+		MovementDestinationLineBatch,
+		GridManager,
+		Cell,
+		MovementDestinationLineColor,
+		MovementDestinationLineThickness,
+		MovementDestinationLineHeightOffset);
 
 	MovementDestinationText->SetWorldLocation(
 		GroundLocation + FVector(0.0f, 0.0f, MovementDestinationTextHeightOffset));
@@ -320,6 +331,64 @@ void AGridHighlightActor::ClearMovementDestination()
 	{
 		MovementDestinationText->SetVisibility(false);
 		MovementDestinationText->SetHiddenInGame(true);
+	}
+}
+
+void AGridHighlightActor::ShowHoveredEnemyCell(AGridManager* GridManager, const FIntPoint& Cell)
+{
+	ClearHoveredEnemyCell();
+	DrawCellBox(
+		HoveredEnemyCellLineBatch,
+		GridManager,
+		Cell,
+		HoveredEnemyCellLineColor,
+		HoveredEnemyCellLineThickness,
+		HoveredEnemyCellLineHeightOffset);
+}
+
+void AGridHighlightActor::ClearHoveredEnemyCell()
+{
+	ClearBoundaryLines(HoveredEnemyCellLineBatch);
+}
+
+void AGridHighlightActor::DrawCellBox(
+	ULineBatchComponent* LineBatch,
+	AGridManager* GridManager,
+	const FIntPoint& Cell,
+	const FLinearColor& LineColor,
+	float LineThickness,
+	float HeightOffset)
+{
+	if (!LineBatch || !GridManager)
+	{
+		return;
+	}
+
+	FVector GroundLocation = GridManager->GridToWorld(Cell);
+	FVector NavigationLocation;
+	if (GridManager->TryGetNavigationLocationForCell(Cell, NavigationLocation))
+	{
+		GroundLocation.Z = NavigationLocation.Z;
+	}
+
+	const float HalfSize = GridManager->CellSize * 0.5f;
+	const FVector Center = GroundLocation + FVector(0.0f, 0.0f, HeightOffset);
+	const FVector Corners[] =
+	{
+		Center + FVector(-HalfSize, -HalfSize, 0.0f),
+		Center + FVector(HalfSize, -HalfSize, 0.0f),
+		Center + FVector(HalfSize, HalfSize, 0.0f),
+		Center + FVector(-HalfSize, HalfSize, 0.0f)
+	};
+
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		LineBatch->DrawLine(
+			Corners[Index],
+			Corners[(Index + 1) % 4],
+			LineColor,
+			0,
+			LineThickness);
 	}
 }
 

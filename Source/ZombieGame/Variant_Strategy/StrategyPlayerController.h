@@ -377,6 +377,8 @@ protected:
 	/** Touch secondary finger completed */
 	void TouchSecondaryCompleted(const FInputActionValue& Value);
 
+	void EscapePressed();
+
 	/** Attempt to select or deselect units at the cached location */
 	void DoSelectionCommand();
 
@@ -427,6 +429,8 @@ protected:
 	void RefreshShootableTargetIcons();
 	void RefreshShootableTargetIconsForCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost);
 	void UpdateShootTargetHoverIndicator();
+	bool TryAttackHoveredEnemy();
+	bool TryExecuteDirectAttack(AStrategyUnit* Attacker, AStrategyUnit* Target);
 	void BeginOverwatchPlacement(AStrategyUnit* Unit);
 	void UpdateOverwatchPlacementPreview();
 	void ConfirmOverwatchPlacement();
@@ -475,6 +479,15 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<AStrategyUnit> LastMovementPreviewUnit = nullptr;
+
+	UPROPERTY(Transient)
+	FIntPoint PendingMoveCell = FIntPoint::ZeroValue;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AStrategyUnit> PendingMoveUnit = nullptr;
+
+	UPROPERTY(Transient)
+	bool bHasPendingMoveDestination = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cover")
 	float CoverHalfTraceHeight = 80.0f;

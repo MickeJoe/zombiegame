@@ -94,6 +94,15 @@ public:
 	UPROPERTY(EditAnywhere, Category="Highlight|Movement Path")
 	float MovementPathLineHeightOffset = 10.0f;
 
+	UPROPERTY(EditAnywhere, Category="Highlight|Selected Cell")
+	FLinearColor SelectedCellLineColor = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Selected Cell", meta=(ClampMin="0.0"))
+	float SelectedCellLineThickness = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Selected Cell")
+	float SelectedCellLineHeightOffset = 20.0f;
+
 	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
 	FLinearColor MovementDestinationLineColor = FLinearColor(1.0f, 0.88f, 0.12f, 1.0f);
 
@@ -111,6 +120,15 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="Highlight|Movement Destination")
 	float MovementDestinationTextHeightOffset = 34.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Enemy Cell")
+	FLinearColor HoveredEnemyCellLineColor = FLinearColor(1.0f, 0.0f, 0.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Enemy Cell", meta=(ClampMin="0.0"))
+	float HoveredEnemyCellLineThickness = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="Highlight|Hovered Enemy Cell")
+	float HoveredEnemyCellLineHeightOffset = 24.0f;
 
 	UPROPERTY(EditAnywhere, Category="Highlight|Cover")
 	TObjectPtr<UTexture2D> HalfCoverTexture;
@@ -163,8 +181,12 @@ public:
 	void ClearOverwatchPreviewBoundaryLines();
 	void ShowMovementPath(const TArray<FVector>& PathPoints);
 	void ClearMovementPath();
+	void ShowSelectedCell(AGridManager* GridManager, const FIntPoint& Cell);
+	void ClearSelectedCell();
 	void ShowMovementDestination(AGridManager* GridManager, const FIntPoint& Cell, int32 RemainingTimeUnits);
 	void ClearMovementDestination();
+	void ShowHoveredEnemyCell(AGridManager* GridManager, const FIntPoint& Cell);
+	void ClearHoveredEnemyCell();
 	void ShowCoverIndicators(const TArray<FGridCoverIndicator>& Indicators);
 	void ClearCoverIndicators();
 
@@ -188,16 +210,23 @@ protected:
 	TObjectPtr<ULineBatchComponent> MovementPathLineBatch;
 
 	UPROPERTY()
+	TObjectPtr<ULineBatchComponent> SelectedCellLineBatch;
+
+	UPROPERTY()
 	TObjectPtr<ULineBatchComponent> MovementDestinationLineBatch;
 
 	UPROPERTY()
 	TObjectPtr<UTextRenderComponent> MovementDestinationText;
 
 	UPROPERTY()
+	TObjectPtr<ULineBatchComponent> HoveredEnemyCellLineBatch;
+
+	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> CoverIndicatorPool;
 
 	UDecalComponent* GetOrCreateDecal(TArray<TObjectPtr<UDecalComponent>>& Pool, int32 Index, UMaterialInterface* Material);
 	UStaticMeshComponent* GetOrCreateCoverIndicator(int32 Index);
+	void DrawCellBox(ULineBatchComponent* LineBatch, AGridManager* GridManager, const FIntPoint& Cell, const FLinearColor& LineColor, float LineThickness, float HeightOffset);
 	void ShowCells(AGridManager* GridManager, const TArray<FIntPoint>& Cells, TArray<TObjectPtr<UDecalComponent>>& Pool, UMaterialInterface* Material, bool bRequireWalkableGround);
 	void ClearHighlights(TArray<TObjectPtr<UDecalComponent>>& Pool);
 	void DrawBoundaryLine(ULineBatchComponent* LineBatch, const FOverwatchBoundaryLine& BoundaryLine);

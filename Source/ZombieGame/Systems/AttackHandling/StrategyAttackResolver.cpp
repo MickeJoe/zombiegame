@@ -44,6 +44,17 @@ FStrategyAttackContext UStrategyAttackResolver::MakeContext(AStrategyUnit* Attac
 	return Context;
 }
 
+FStrategyAttackContext UStrategyAttackResolver::MakeContextFromCell(
+	AStrategyUnit* Attacker,
+	AStrategyUnit* Target,
+	const FIntPoint& AttackerCell)
+{
+	FStrategyAttackContext Context = MakeContext(Attacker, Target);
+	Context.bUseOverrideAttackerCell = true;
+	Context.OverrideAttackerCell = AttackerCell;
+	return Context;
+}
+
 FStrategyAttackContext UStrategyAttackResolver::MakeContextWithAttackStats(
 	AStrategyUnit* Attacker,
 	AStrategyUnit* Target,
@@ -66,7 +77,9 @@ int32 UStrategyAttackResolver::CalculateDistanceInCells(const FStrategyAttackCon
 		if (const AGridManager* GridManager = Cast<AGridManager>(
 			UGameplayStatics::GetActorOfClass(World, AGridManager::StaticClass())))
 		{
-			const FIntPoint AttackerCell = GridManager->WorldToGrid(Context.Attacker->GetActorLocation());
+			const FIntPoint AttackerCell = Context.bUseOverrideAttackerCell
+				? Context.OverrideAttackerCell
+				: GridManager->WorldToGrid(Context.Attacker->GetActorLocation());
 			const FIntPoint TargetCell = GridManager->WorldToGrid(Context.Target->GetActorLocation());
 
 			return FMath::Abs(AttackerCell.X - TargetCell.X) + FMath::Abs(AttackerCell.Y - TargetCell.Y);

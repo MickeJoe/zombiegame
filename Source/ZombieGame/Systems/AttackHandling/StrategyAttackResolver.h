@@ -25,6 +25,12 @@ struct FStrategyAttackContext
 	UPROPERTY(BlueprintReadOnly)
 	TObjectPtr<UUnitData> TargetUnitData = nullptr;
 
+	UPROPERTY(BlueprintReadOnly)
+	bool bUseOverrideAttackerCell = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	FIntPoint OverrideAttackerCell = FIntPoint::ZeroValue;
+
 	const FStrategyWeaponInstance* EquippedWeapon = nullptr;
 	const FAttackStats* AttackStats = nullptr;
 };
@@ -60,6 +66,7 @@ class UStrategyAttackResolver : public UObject
 
 public:
 	static FStrategyAttackContext MakeContext(AStrategyUnit* Attacker, AStrategyUnit* Target);
+	static FStrategyAttackContext MakeContextFromCell(AStrategyUnit* Attacker, AStrategyUnit* Target, const FIntPoint& AttackerCell);
 	static FStrategyAttackContext MakeContextWithAttackStats(AStrategyUnit* Attacker, AStrategyUnit* Target, const FAttackStats* AttackStats);
 	static int32 CalculateDistanceInCells(const FStrategyAttackContext& Context);
 	static int32 CalculateHitChance(const FStrategyAttackContext& Context);
