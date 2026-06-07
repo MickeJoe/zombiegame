@@ -29,4 +29,6 @@ protected:
 	
 	UFUNCTION()
 	void HandleEndTurnClicked();
+
+	double LastBroadcastTime = -1.0;
 };

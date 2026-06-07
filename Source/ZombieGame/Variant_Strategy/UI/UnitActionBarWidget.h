@@ -87,4 +87,7 @@ private:
 
 	UFUNCTION()
 	void HandleSkipClicked();
+
+	EPlayerUnitActionType LastBroadcastActionType = EPlayerUnitActionType::None;
+	double LastBroadcastActionTime = -1.0;
 };

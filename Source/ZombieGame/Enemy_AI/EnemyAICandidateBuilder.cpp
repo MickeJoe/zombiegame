@@ -112,6 +112,22 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 	OutCandidates.Add(Candidate);
 }
 
+void EnemyAICandidateBuilder::AddCrouchCandidate(
+	AStrategyUnit* Unit,
+	TArray<FEnemyActionCandidate>& OutCandidates)
+{
+	if (!Unit || !Unit->CanCrouch())
+	{
+		return;
+	}
+
+	FEnemyActionCandidate Candidate;
+	Candidate.ActionType = EEnemyAIActionType::Crouch;
+	Candidate.TimeUnitCost = Unit->GetCrouchTimeUnitCost();
+
+	OutCandidates.Add(Candidate);
+}
+
 void EnemyAICandidateBuilder::AddMoveToCoverCandidates(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,

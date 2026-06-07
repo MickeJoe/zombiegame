@@ -178,10 +178,33 @@ void AStrategyGameMode::SpawnUnits()
 		BindUnitOverwatchMovement(Unit);
 	}
 
-	for (AStrategySpawnPoint* Spawn : EnemySpawns)
+	const int32 EnemyUnitCount = EnemyUnitClasses.Num() > 0
+		? FMath::Min(EnemySpawns.Num(), EnemyUnitClasses.Num())
+		: EnemySpawns.Num();
+
+	if (EnemyUnitClasses.Num() > EnemySpawns.Num())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Only %d of %d configured enemy unit classes can spawn because there are %d enemy spawn points"),
+			EnemyUnitCount,
+			EnemyUnitClasses.Num(),
+			EnemySpawns.Num());
+	}
+
+	for (int32 Index = 0; Index < EnemyUnitCount; ++Index)
+	{
+		AStrategySpawnPoint* Spawn = EnemySpawns[Index];
+		TSubclassOf<AStrategyUnit> UnitClass = EnemyUnitClasses.Num() > 0
+			? EnemyUnitClasses[Index]
+			: EnemyUnitClass;
+
+		if (!UnitClass)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Enemy unit spawn skipped: no unit class at index %d"), Index);
+			continue;
+		}
+
 		AStrategyUnit* Unit = GetWorld()->SpawnActor<AStrategyUnit>(
-			EnemyUnitClass,
+			UnitClass,
 			GetProjectedSpawnTransform(Spawn),
 			Params);
 

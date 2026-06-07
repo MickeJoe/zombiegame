@@ -12,6 +12,7 @@
 #include "EnemyUnitAI.h"
 
 #include "EnemyAIActionExecutor.h"
+#include "EnemyAIDebug.h"
 #include "Kismet/GameplayStatics.h"
 #include "Systems/GridManager.h"
 #include "StrategyGameMode.h"
@@ -30,6 +31,10 @@ void UEnemyUnitAI::TakeTurn(
 	CachedSightManager = SightManager;
 	CachedPlayerSide = PlayerSide;
 	CachedEnemySide = EnemySide;
+
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogTurnStart(OwnerUnit);
+#endif
 
 	ExecuteNextAction();
 }
@@ -62,6 +67,10 @@ void UEnemyUnitAI::ExecuteNextAction()
 			CachedEnemySide);
 	}
 
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogCandidates(OwnerUnit, Candidates);
+#endif
+
 	const FEnemyActionCandidate* BestAction = FindBestCandidate(Candidates);
 
 	if (!BestAction)
@@ -71,6 +80,10 @@ void UEnemyUnitAI::ExecuteNextAction()
 	}
 
 	CurrentAction = *BestAction;
+
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogSelectedAction(OwnerUnit, CurrentAction);
+#endif
 
 	FEnemyAIActionExecutor::Execute(
 		CachedGridManager,
@@ -133,6 +146,10 @@ float UEnemyUnitAI::ScoreCandidate(
 		*/
 		break;
 
+	case EEnemyAIActionType::Crouch:
+		Score += Weights.Crouch;
+		break;
+
 	case EEnemyAIActionType::MoveTowardNearestVisiblePlayer:
 		Score += Weights.MoveTowardTarget;
 		Score += Candidate.DistanceToTargetAfterMove * Weights.DistanceToTarget;
@@ -166,7 +183,32 @@ void UEnemyUnitAI::OnMoveCompleted(AStrategyUnit* MovedUnit)
 		return;
 	}
 
+	const int32 RemainingTimeUnitsBeforeSpend = OwnerUnit->GetRemainingTimeUnits();
 	OwnerUnit->SpendTimeUnits(CurrentAction.TimeUnitCost);
+
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogActionCompleted(OwnerUnit, CurrentAction, RemainingTimeUnitsBeforeSpend);
+#endif
+
+	ExecuteNextAction();
+}
+
+void UEnemyUnitAI::OnActionCompleted(AStrategyUnit* ActionUnit)
+{
+	if (ActionUnit != OwnerUnit)
+	{
+		return;
+	}
+
+	if (!IsValid(OwnerUnit) || OwnerUnit->GetCurrentHealth() <= 0)
+	{
+		FinishUnitTurn();
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogActionCompleted(OwnerUnit, CurrentAction, OwnerUnit->GetRemainingTimeUnits());
+#endif
 
 	ExecuteNextAction();
 }

@@ -81,7 +81,7 @@ void SWeaponInfoSlateWidget::SetUnit(AStrategyUnit* SelectedUnit)
 		return;
 	}
 
-	SetVisibility(EVisibility::Visible);
+	SetVisibility(EVisibility::SelfHitTestInvisible);
 
 	AddWeaponRow(SelectedUnit, EEquippableItemSlot::Primary, PrimaryItem, SelectedUnit->GetWeaponInSlot(EEquippableItemSlot::Primary));
 	AddWeaponRow(SelectedUnit, EEquippableItemSlot::Secondary, SecondaryItem, SelectedUnit->GetWeaponInSlot(EEquippableItemSlot::Secondary));

@@ -15,6 +15,10 @@ public:
 		AGridManager* GridManager,
 		APlayerStrategySide* PlayerSide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
+
+	static void AddCrouchCandidate(
+		AStrategyUnit* Unit,
+		TArray<FEnemyActionCandidate>& OutCandidates);
 	
 	static void AddMoveToCoverCandidates(
 		AStrategyUnit* Unit,

@@ -14,4 +14,7 @@ class ZOMBIEGAME_API UStrategyCheatManager : public UCheatManager
 public:
 	UFUNCTION(exec)
 	void EnableAlwaysMeleeAttack(bool bEnable = true);
+
+	UFUNCTION(exec)
+	void EnableEnemyAIDebug(bool bEnable = true);
 };

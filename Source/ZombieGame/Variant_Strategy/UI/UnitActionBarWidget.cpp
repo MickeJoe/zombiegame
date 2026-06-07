@@ -8,23 +8,56 @@ void UUnitActionBarWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	if (Button_Melee)     Button_Melee->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleMeleeClicked);
-	if (Button_Fire)      Button_Fire->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleFireClicked);
-	if (Button_Reload)    Button_Reload->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleReloadClicked);
-	if (Button_Hunker)    Button_Hunker->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleHunkerClicked);
-	if (Button_Overwatch) Button_Overwatch->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleOverwatchClicked);
-	if (Button_Skip)      Button_Skip->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleSkipClicked);
+	if (Button_Melee)
+	{
+		Button_Melee->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Melee->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleMeleeClicked);
+		Button_Melee->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleMeleeClicked);
+	}
+	if (Button_Fire)
+	{
+		Button_Fire->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Fire->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleFireClicked);
+		Button_Fire->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleFireClicked);
+	}
+	if (Button_Reload)
+	{
+		Button_Reload->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Reload->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleReloadClicked);
+		Button_Reload->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleReloadClicked);
+	}
+	if (Button_Hunker)
+	{
+		Button_Hunker->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Hunker->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleHunkerClicked);
+		Button_Hunker->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleHunkerClicked);
+	}
+	if (Button_Overwatch)
+	{
+		Button_Overwatch->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Overwatch->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleOverwatchClicked);
+		Button_Overwatch->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleOverwatchClicked);
+	}
+	if (Button_Skip)
+	{
+		Button_Skip->SetClickMethod(EButtonClickMethod::MouseDown);
+		Button_Skip->OnPressed.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleSkipClicked);
+		Button_Skip->OnClicked.AddUniqueDynamic(this, &UUnitActionBarWidget::HandleSkipClicked);
+	}
 
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT("ActionBar initialized. ReloadButton=%s"),
-		Button_Reload ? *Button_Reload->GetName() : TEXT("NULL"));
+		TEXT("ActionBar initialized. ReloadButton=%s HunkerButton=%s"),
+		Button_Reload ? *Button_Reload->GetName() : TEXT("NULL"),
+		Button_Hunker ? *Button_Hunker->GetName() : TEXT("NULL"));
 }
 
 void UUnitActionBarWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	if (Button_Melee)     Button_Melee->SetIsEnabled(false);
 	if (Button_Fire)      Button_Fire->SetIsEnabled(false);
@@ -119,6 +152,16 @@ void UUnitActionBarWidget::SetActions(const TArray<FUnitActionButtonData>& Actio
 
 void UUnitActionBarWidget::OnActionClicked(EPlayerUnitActionType ActionType)
 {
+	const double Now = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.0;
+	if (ActionType == LastBroadcastActionType
+		&& LastBroadcastActionTime >= 0.0
+		&& Now - LastBroadcastActionTime < 0.05)
+	{
+		return;
+	}
+
+	LastBroadcastActionType = ActionType;
+	LastBroadcastActionTime = Now;
 	OnUnitActionClicked.Broadcast(ActionType);
 }
 

@@ -28,6 +28,7 @@ class UUnitData;
 class UAnimMontage;
 class UEquippableItemData;
 class UMedicBagData;
+enum class EGridCoverType : uint8;
 
 UENUM(BlueprintType)
 enum class EStrategyUnitTeam : uint8
@@ -114,6 +115,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Unit Stats")
 	int32 GetCurrentHealth() const { return CurrentHealth; }
 
+	UFUNCTION(BlueprintPure, Category = "Unit Stats")
+	int32 GetCurrentArmor() const { return CurrentArmor; }
+
 	UFUNCTION(BlueprintPure, Category = "Unit Stats", meta=(DeprecatedFunction, DeprecationMessage="Use GetMaxTimeUnits instead."))
 	int32 GetMaxActionPoints() const;
 
@@ -131,6 +135,8 @@ public:
 	const FAttackStats* GetBiteAttackStatsPtr() const;
 	int32 GetBiteAttackRange() const;
 	int32 GetBiteAttackTimeUnitCost() const;
+	int32 GetCrouchTimeUnitCost() const;
+	int32 GetCrouchHitChanceModifier(bool bHasCover, EGridCoverType CoverType) const;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Strategy")
 	TObjectPtr<AStrategySide> OwningSide = nullptr;
@@ -158,6 +164,9 @@ public:
 	bool CanReload() const;
 	void ReloadWeapon();
 	bool CanOverwatch() const;
+	bool CanCrouch() const;
+	float EnterCrouch();
+	bool IsCrouching() const { return bIsCrouching; }
 	int32 GetOverwatchRange() const;
 	float GetOverwatchConeAngleDegrees() const;
 	void EnterOverwatch(const FVector& Direction, int32 Range, float AngleDegrees, const TArray<FIntPoint>& Cells);
@@ -290,6 +299,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Overwatch")
 	TArray<FIntPoint> OverwatchCells;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Crouch")
+	bool bIsCrouching = false;
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;

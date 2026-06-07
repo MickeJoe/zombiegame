@@ -12,6 +12,7 @@ UENUM()
 enum class EEnemyAIActionType : uint8
 {
 	BiteAttack,
+	Crouch,
 	MoveToCover,
 	MoveTowardNearestVisiblePlayer,
 	HoldHighGround,
@@ -33,6 +34,7 @@ struct FEnemyActionCandidate
 struct FEnemyAIWeights
 {
 	float BiteAttack = 0.0f;
+	float Crouch = 0.0f;
 	float Cover  = 0.0f;
 	float HighGround = 0.0f;
 	float Distance = 0.0f;
@@ -60,6 +62,9 @@ public:
 	
 	UFUNCTION()
 	void OnMoveCompleted(AStrategyUnit* MovedUnit);	
+
+	UFUNCTION()
+	void OnActionCompleted(AStrategyUnit* ActionUnit);
 	
 protected:
 	virtual void GenerateCandidates(

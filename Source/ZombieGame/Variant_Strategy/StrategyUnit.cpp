@@ -30,6 +30,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Components/ChildActorComponent.h"
+#include "Systems/GridHighlightActor.h"
 
 namespace
 {
@@ -267,6 +268,8 @@ bool AStrategyUnit::MoveToLocation(const FVector& Location, float AcceptanceRadi
 	// ensure we have a valid AI Controller
 	if (AIController)
 	{
+		bIsCrouching = false;
+
 		// set up the AI Move Request
 		FAIMoveRequest MoveReq;
 
@@ -341,6 +344,7 @@ void AStrategyUnit::ResetTimeUnits()
 {
 	UsedTimeUnits = 0;
 	ClearOverwatch();
+	bIsCrouching = false;
 }
 
 int32 AStrategyUnit::GetRemainingTimeUnits() const
@@ -443,6 +447,36 @@ int32 AStrategyUnit::GetBiteAttackTimeUnitCost() const
 	}
 
 	return 1;
+}
+
+int32 AStrategyUnit::GetCrouchTimeUnitCost() const
+{
+	return UnitData ? FMath::Max(UnitData->CrouchTimeUnitCost, 0) : 1;
+}
+
+int32 AStrategyUnit::GetCrouchHitChanceModifier(bool bHasCover, EGridCoverType CoverType) const
+{
+	if (!UnitData)
+	{
+		return 0;
+	}
+
+	if (!bHasCover)
+	{
+		return UnitData->CrouchHitChanceModifiers.NoCover;
+	}
+
+	switch (CoverType)
+	{
+	case EGridCoverType::Half:
+		return UnitData->CrouchHitChanceModifiers.HalfCover;
+
+	case EGridCoverType::Full:
+		return UnitData->CrouchHitChanceModifiers.FullCover;
+
+	default:
+		return UnitData->CrouchHitChanceModifiers.NoCover;
+	}
 }
 
 void AStrategyUnit::Tick(float DeltaTime)
@@ -792,6 +826,36 @@ bool AStrategyUnit::CanOverwatch() const
 	return GetRemainingTimeUnits() > 0
 		&& FireWeapon.WeaponData
 		&& FireWeapon.GetAttackStats();
+}
+
+bool AStrategyUnit::CanCrouch() const
+{
+	return GetCurrentHealth() > 0
+		&& !bIsCrouching
+		&& GetRemainingTimeUnits() >= GetCrouchTimeUnitCost();
+}
+
+float AStrategyUnit::EnterCrouch()
+{
+	if (!CanCrouch())
+	{
+		return 0.0f;
+	}
+
+	bIsCrouching = true;
+	ClearOverwatch();
+	SpendTimeUnits(GetCrouchTimeUnitCost());
+
+	if (!UnitData || !UnitData->CrouchAnimation.Montage)
+	{
+		return 0.0f;
+	}
+
+	return PlayResolvedAttackMontage(
+		UnitData->CrouchAnimation.Montage,
+		UnitData->CrouchAnimation.MeshComponentName,
+		UnitData->CrouchAnimation.MontageSection,
+		TEXT("crouch"));
 }
 
 int32 AStrategyUnit::GetOverwatchRange() const

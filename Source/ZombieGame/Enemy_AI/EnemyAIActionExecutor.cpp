@@ -1,5 +1,6 @@
 ﻿#include "EnemyAIActionExecutor.h"
 
+#include "EnemyAIDebug.h"
 #include "StrategyUnit.h"
 #include "EnemyUnitAI.h"
 #include "StrategyPlayerController.h"
@@ -17,6 +18,10 @@ void FEnemyAIActionExecutor::Execute(
 	{
 	case EEnemyAIActionType::BiteAttack:
 		ExecuteBiteAttack(Unit, Candidate, OwnerAI);
+		break;
+
+	case EEnemyAIActionType::Crouch:
+		ExecuteCrouch(Unit, OwnerAI);
 		break;
 
 	case EEnemyAIActionType::MoveToCover:
@@ -68,7 +73,12 @@ void FEnemyAIActionExecutor::ExecuteBiteAttack(
 	const FStrategyAttackContext Context =
 		UStrategyAttackResolver::MakeContextWithAttackStats(Unit, Candidate.TargetUnit, AttackStats);
 	Unit->FaceTargetForAttack(Candidate.TargetUnit);
+	const int32 TargetHealthBefore = Candidate.TargetUnit->GetCurrentHealth();
+	const int32 TargetArmorBefore = Candidate.TargetUnit->GetCurrentArmor();
 	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
+#if !UE_BUILD_SHIPPING
+	FEnemyAIDebug::LogBiteAttackResult(Unit, Candidate, Result, TargetHealthBefore, TargetArmorBefore);
+#endif
 	const float AttackMontageDuration = Unit->PlayBiteAttackMontage();
 
 	if (AStrategyPlayerController* PC = Unit->GetWorld()
@@ -85,6 +95,28 @@ void FEnemyAIActionExecutor::ExecuteBiteAttack(
 		Unit->GetWorldTimerManager().SetTimer(
 			BiteActionCompleteTimerHandle,
 			FTimerDelegate::CreateUObject(OwnerAI, &UEnemyUnitAI::OnMoveCompleted, Unit),
+			ActionDelay,
+			false);
+	}
+}
+
+void FEnemyAIActionExecutor::ExecuteCrouch(
+	AStrategyUnit* Unit,
+	UEnemyUnitAI* OwnerAI)
+{
+	if (!IsValid(Unit))
+	{
+		return;
+	}
+
+	const float CrouchMontageDuration = Unit->EnterCrouch();
+	if (OwnerAI)
+	{
+		const float ActionDelay = FMath::Max(CrouchMontageDuration, 0.1f);
+		FTimerHandle CrouchActionCompleteTimerHandle;
+		Unit->GetWorldTimerManager().SetTimer(
+			CrouchActionCompleteTimerHandle,
+			FTimerDelegate::CreateUObject(OwnerAI, &UEnemyUnitAI::OnActionCompleted, Unit),
 			ActionDelay,
 			false);
 	}

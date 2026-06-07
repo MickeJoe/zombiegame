@@ -5,6 +5,7 @@
 #include "Data/Unit/UnitData.h"
 #include "Kismet/GameplayStatics.h"
 #include "Systems/GridManager.h"
+#include "Systems/GridHighlightActor.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
 
 namespace
@@ -20,6 +21,78 @@ namespace
 		}
 
 		return nullptr;
+	}
+
+	FIntPoint GetDominantGridDirection(const FIntPoint& FromCell, const FIntPoint& ToCell)
+	{
+		const int32 DeltaX = ToCell.X - FromCell.X;
+		const int32 DeltaY = ToCell.Y - FromCell.Y;
+		if (DeltaX == 0 && DeltaY == 0)
+		{
+			return FIntPoint::ZeroValue;
+		}
+
+		if (FMath::Abs(DeltaX) >= FMath::Abs(DeltaY))
+		{
+			return FIntPoint(DeltaX > 0 ? 1 : -1, 0);
+		}
+
+		return FIntPoint(0, DeltaY > 0 ? 1 : -1);
+	}
+
+	bool TryGetCoverTypeForAttackDirection(
+		const FStrategyAttackContext& Context,
+		AGridManager* GridManager,
+		EGridCoverType& OutCoverType)
+	{
+		if (!Context.Attacker || !Context.Target || !GridManager || !Context.Attacker->GetWorld())
+		{
+			return false;
+		}
+
+		const FIntPoint AttackerCell = Context.bUseOverrideAttackerCell
+			? Context.OverrideAttackerCell
+			: GridManager->WorldToGrid(Context.Attacker->GetActorLocation());
+		const FIntPoint TargetCell = GridManager->WorldToGrid(Context.Target->GetActorLocation());
+		const FIntPoint Direction = GetDominantGridDirection(TargetCell, AttackerCell);
+		if (Direction == FIntPoint::ZeroValue)
+		{
+			return false;
+		}
+
+		const FVector CellCenter = GridManager->GridToWorld(TargetCell);
+		const FVector DirectionVector(
+			static_cast<float>(Direction.X),
+			static_cast<float>(Direction.Y),
+			0.0f);
+		const FVector TraceEndBase = CellCenter + DirectionVector * GridManager->CellSize;
+
+		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CrouchCoverTrace), false);
+		QueryParams.AddIgnoredActor(Context.Attacker);
+		QueryParams.AddIgnoredActor(Context.Target);
+
+		auto IsBlockedAtHeight = [&Context, &QueryParams, CellCenter, TraceEndBase](float Height)
+		{
+			FHitResult Hit;
+			return Context.Attacker->GetWorld()->LineTraceSingleByChannel(
+				Hit,
+				CellCenter + FVector(0.0f, 0.0f, Height),
+				TraceEndBase + FVector(0.0f, 0.0f, Height),
+				ECC_Visibility,
+				QueryParams);
+		};
+
+		constexpr float HalfCoverTraceHeight = 80.0f;
+		constexpr float FullCoverTraceHeight = 165.0f;
+		if (!IsBlockedAtHeight(HalfCoverTraceHeight))
+		{
+			return false;
+		}
+
+		OutCoverType = IsBlockedAtHeight(FullCoverTraceHeight)
+			? EGridCoverType::Full
+			: EGridCoverType::Half;
+		return true;
 	}
 }
 
@@ -114,6 +187,22 @@ int32 UStrategyAttackResolver::CalculateHitChance(const FStrategyAttackContext& 
 	if (Context.TargetUnitData)
 	{
 		HitChance -= Context.TargetUnitData->Defense;
+	}
+
+	if (Context.Target && Context.Target->IsCrouching())
+	{
+		EGridCoverType CoverType = EGridCoverType::Half;
+		bool bHasCover = false;
+		if (Context.Attacker && Context.Attacker->GetWorld())
+		{
+			if (AGridManager* GridManager = Cast<AGridManager>(
+				UGameplayStatics::GetActorOfClass(Context.Attacker->GetWorld(), AGridManager::StaticClass())))
+			{
+				bHasCover = TryGetCoverTypeForAttackDirection(Context, GridManager, CoverType);
+			}
+		}
+
+		HitChance += Context.Target->GetCrouchHitChanceModifier(bHasCover, CoverType);
 	}
 
 	const int32 MinHitChance = FMath::Clamp(Context.AttackStats->MinimumHitChance, 0, 100);

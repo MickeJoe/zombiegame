@@ -54,6 +54,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category="Units")
 	TSubclassOf<AStrategyUnit> EnemyUnitClass;
+
+	UPROPERTY(EditDefaultsOnly, Category="Units")
+	TArray<TSubclassOf<AStrategyUnit>> EnemyUnitClasses;
 	
 	UPROPERTY(BlueprintAssignable)
 	FOnMatchReady OnMatchReady;

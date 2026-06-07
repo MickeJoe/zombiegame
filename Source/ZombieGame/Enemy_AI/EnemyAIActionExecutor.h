@@ -22,6 +22,10 @@ private:
 		const FEnemyActionCandidate& Candidate,
 		UEnemyUnitAI* OwnerAI);
 
+	static void ExecuteCrouch(
+		AStrategyUnit* Unit,
+		UEnemyUnitAI* OwnerAI);
+
 	static void ExecuteMove(
 		AGridManager* GridManager,
 		AStrategyUnit* Unit,

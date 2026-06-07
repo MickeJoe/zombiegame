@@ -28,6 +28,21 @@ struct FStrategyAttackAnimation
 	FName MontageSection = NAME_None;
 };
 
+USTRUCT(BlueprintType)
+struct FUnitCrouchHitChanceModifiers
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Crouch")
+	int32 NoCover = -10;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Crouch")
+	int32 HalfCover = -20;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Crouch")
+	int32 FullCover = -30;
+};
+
 UCLASS(BlueprintType)
 class UUnitData : public UPrimaryDataAsset
 {
@@ -70,6 +85,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Defense")
 	int32 CriticalDefense = 0;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Crouch", meta=(ClampMin="0"))
+	int32 CrouchTimeUnitCost = 1;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Crouch")
+	FUnitCrouchHitChanceModifiers CrouchHitChanceModifiers;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat", meta=(DeprecatedProperty, DeprecationMessage="Use a UStrategyWeaponData with AttackType Bite in DefaultItems instead."))
 	FAttackStats BiteAttack;
 
@@ -99,6 +120,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation")
 	TObjectPtr<UAnimMontage> DeathReactMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Crouch")
+	FStrategyAttackAnimation CrouchAnimation;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Combat")
 	TMap<FName, FStrategyAttackAnimation> WeaponAttackAnimations;

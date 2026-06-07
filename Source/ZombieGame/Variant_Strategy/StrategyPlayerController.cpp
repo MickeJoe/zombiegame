@@ -427,6 +427,11 @@ void AStrategyPlayerController::SelectHoldCompleted(const FInputActionValue& Val
 
 void AStrategyPlayerController::SelectClick(const FInputActionValue& Value)
 {
+	if (IsPointerOverBlockingUI())
+	{
+		return;
+	}
+
 	if (bIsPlacingOverwatch)
 	{
 		ConfirmOverwatchPlacement();
@@ -1970,6 +1975,12 @@ bool AStrategyPlayerController::IsSelectableUnit(const AStrategyUnit* Unit) cons
 	return Unit && Unit->GetStrategyUnitTeam() == EStrategyUnitTeam::Human;
 }
 
+bool AStrategyPlayerController::IsPointerOverBlockingUI() const
+{
+	return (UnitActionBarWidget && UnitActionBarWidget->IsHovered())
+		|| (EndTurnWidget && EndTurnWidget->IsHovered());
+}
+
 void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType ActionType)
 {
 	SuppressSelectionInputBriefly();
@@ -2005,8 +2016,10 @@ void AStrategyPlayerController::HandleUnitActionClicked(EPlayerUnitActionType Ac
 		break;
 
 	case EPlayerUnitActionType::HunkerDown:
-//		SelectedUnit->HunkerDown();
+		SelectedUnit->EnterCrouch();
 		RefreshActionBar();
+		RefreshPlayerUnitRoster();
+		RefreshWeaponInfoPanel();
 		break;
 
 	case EPlayerUnitActionType::Overwatch:
@@ -2093,12 +2106,6 @@ void AStrategyPlayerController::RefreshActionBar()
 		return;
 	}
 
-	AAIStrategySide* EnemySide = GameMode->GetEnemySide();
-	if (!ensureMsgf(EnemySide, TEXT("EnemySide is null in AStrategyPlayerController::RefreshActionBar")))
-	{
-		return;
-	}
-	
 	TArray<FUnitActionButtonData> Actions;
 	
 	Actions.Add({
@@ -2125,16 +2132,13 @@ void AStrategyPlayerController::RefreshActionBar()
 		FText::FromString("No TU")
 	});
 
-/*
 	Actions.Add({
 		EPlayerUnitActionType::HunkerDown,
 		FText::FromString("Hunker"),
 		nullptr,
-		SelectedUnit->CanHunkerDown(),
+		SelectedUnit->CanCrouch(),
 		FText::FromString("No TU")
 	});
-
-*/
 	UnitActionBarWidget->SetActions(Actions);
 	RefreshShootableTargetIcons();
 	
@@ -3022,7 +3026,7 @@ void AStrategyPlayerController::EnsureWeaponInfoSlateWidget()
 
 	WeaponInfoSlateWidget = SNew(SWeaponInfoSlateWidget);
 
-	GEngine->GameViewport->AddViewportWidgetContent(WeaponInfoSlateWidget.ToSharedRef(), 5000);
+	GEngine->GameViewport->AddViewportWidgetContent(WeaponInfoSlateWidget.ToSharedRef(), 900);
 }
 
 void AStrategyPlayerController::UpdateWeaponInfoSlateWidget(AStrategyUnit* SelectedUnit)
