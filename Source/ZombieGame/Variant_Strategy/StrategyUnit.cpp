@@ -324,9 +324,18 @@ void AStrategyUnit::SetStrategyUnitTeam(EStrategyUnitTeam InStrategyUnitTeam)
 {
 	StrategyUnitTeam = InStrategyUnitTeam;
 	
-	if (StrategyUnitTeam == EStrategyUnitTeam::AI && UnitData && UnitData->EnemyAIClass)
+	if (StrategyUnitTeam == EStrategyUnitTeam::AI)
 	{
-		EnemyAI = NewObject<UEnemyUnitAI>(this, UnitData->EnemyAIClass);
+		TSubclassOf<UEnemyUnitAI> EnemyAIClass = EnemyAIClassOverride;
+		if (!EnemyAIClass && UnitData)
+		{
+			EnemyAIClass = UnitData->EnemyAIClass;
+		}
+
+		if (EnemyAIClass)
+		{
+			EnemyAI = NewObject<UEnemyUnitAI>(this, EnemyAIClass);
+		}
 	}
 }
 

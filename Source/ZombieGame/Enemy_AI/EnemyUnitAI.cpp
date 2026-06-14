@@ -148,6 +148,13 @@ float UEnemyUnitAI::ScoreCandidate(
 
 	case EEnemyAIActionType::Crouch:
 		Score += Weights.Crouch;
+		Score += Candidate.CoverScore * 60.0f;
+		break;
+
+	case EEnemyAIActionType::MoveToCover:
+		Score += Weights.Cover;
+		Score += Candidate.CoverScore * 20.0f;
+		Score += Candidate.DistanceToTargetAfterMove * Weights.DistanceToTarget;
 		break;
 
 	case EEnemyAIActionType::MoveTowardNearestVisiblePlayer:
@@ -211,6 +218,23 @@ void UEnemyUnitAI::OnActionCompleted(AStrategyUnit* ActionUnit)
 #endif
 
 	ExecuteNextAction();
+}
+
+void UEnemyUnitAI::CompleteActionAndFinishTurn(AStrategyUnit* ActionUnit)
+{
+	if (ActionUnit != OwnerUnit)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (IsValid(OwnerUnit))
+	{
+		FEnemyAIDebug::LogActionCompleted(OwnerUnit, CurrentAction, OwnerUnit->GetRemainingTimeUnits());
+	}
+#endif
+
+	FinishUnitTurn();
 }
 
 void UEnemyUnitAI::FinishUnitTurn()

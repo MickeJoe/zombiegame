@@ -8,6 +8,7 @@
 #include "Systems/GridManager.h"
 #include "Systems/SightManager.h"
 #include "Variant_Strategy/StrategyUnit.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -36,6 +37,116 @@ namespace
 	int32 GetManhattanDistance(const FIntPoint& A, const FIntPoint& B)
 	{
 		return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+	}
+
+	FIntPoint GetDominantGridDirection(const FIntPoint& FromCell, const FIntPoint& ToCell)
+	{
+		const int32 DeltaX = ToCell.X - FromCell.X;
+		const int32 DeltaY = ToCell.Y - FromCell.Y;
+
+		if (DeltaX == 0 && DeltaY == 0)
+		{
+			return FIntPoint::ZeroValue;
+		}
+
+		if (FMath::Abs(DeltaX) >= FMath::Abs(DeltaY))
+		{
+			return FIntPoint(DeltaX > 0 ? 1 : -1, 0);
+		}
+
+		return FIntPoint(0, DeltaY > 0 ? 1 : -1);
+	}
+
+	int32 GetCoverScoreAgainstPlayer(
+		const AStrategyUnit* Unit,
+		const AGridManager* GridManager,
+		const FIntPoint& CoverCell,
+		const AStrategyUnit* PlayerUnit)
+	{
+		if (!Unit || !GridManager || !PlayerUnit || !Unit->GetWorld())
+		{
+			return 0;
+		}
+
+		const FIntPoint PlayerCell = GridManager->WorldToGrid(PlayerUnit->GetActorLocation());
+		const FIntPoint Direction = GetDominantGridDirection(CoverCell, PlayerCell);
+		if (Direction == FIntPoint::ZeroValue)
+		{
+			return 0;
+		}
+
+		const FVector CellCenter = GridManager->GridToWorld(CoverCell);
+		const FVector DirectionVector(
+			static_cast<float>(Direction.X),
+			static_cast<float>(Direction.Y),
+			0.0f);
+		const FVector TraceEndBase = CellCenter + DirectionVector * GridManager->CellSize;
+
+		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(EnemyAICoverTrace), false);
+		QueryParams.AddIgnoredActor(Unit);
+		QueryParams.AddIgnoredActor(PlayerUnit);
+
+		auto IsBlockedAtHeight = [Unit, &QueryParams, CellCenter, TraceEndBase](float Height)
+		{
+			FHitResult Hit;
+			return Unit->GetWorld()->LineTraceSingleByChannel(
+				Hit,
+				CellCenter + FVector(0.0f, 0.0f, Height),
+				TraceEndBase + FVector(0.0f, 0.0f, Height),
+				ECC_Visibility,
+				QueryParams);
+		};
+
+		constexpr float HalfCoverTraceHeight = 80.0f;
+		constexpr float FullCoverTraceHeight = 165.0f;
+		if (!IsBlockedAtHeight(HalfCoverTraceHeight))
+		{
+			return 0;
+		}
+
+		return IsBlockedAtHeight(FullCoverTraceHeight) ? 2 : 1;
+	}
+
+	int32 GetBestCoverScoreAgainstPlayers(
+		const AStrategyUnit* Unit,
+		const AGridManager* GridManager,
+		const APlayerStrategySide* PlayerSide,
+		const FIntPoint& CoverCell,
+		AStrategyUnit*& OutBestTarget)
+	{
+		int32 BestCoverScore = 0;
+		int32 BestDistance = TNumericLimits<int32>::Max();
+		OutBestTarget = nullptr;
+
+		if (!GridManager || !PlayerSide)
+		{
+			return 0;
+		}
+
+		for (AStrategyUnit* PlayerUnit : PlayerSide->Units)
+		{
+			if (!PlayerUnit || PlayerUnit->GetCurrentHealth() <= 0)
+			{
+				continue;
+			}
+
+			const int32 CoverScore = GetCoverScoreAgainstPlayer(Unit, GridManager, CoverCell, PlayerUnit);
+			if (CoverScore <= 0)
+			{
+				continue;
+			}
+
+			const FIntPoint PlayerCell = GridManager->WorldToGrid(PlayerUnit->GetActorLocation());
+			const int32 Distance = GetManhattanDistance(CoverCell, PlayerCell);
+			if (CoverScore > BestCoverScore || (CoverScore == BestCoverScore && Distance < BestDistance))
+			{
+				BestCoverScore = CoverScore;
+				BestDistance = Distance;
+				OutBestTarget = PlayerUnit;
+			}
+		}
+
+		return BestCoverScore;
 	}
 }
 
@@ -114,6 +225,8 @@ void EnemyAICandidateBuilder::AddBiteAttackCandidate(
 
 void EnemyAICandidateBuilder::AddCrouchCandidate(
 	AStrategyUnit* Unit,
+	AGridManager* GridManager,
+	APlayerStrategySide* PlayerSide,
 	TArray<FEnemyActionCandidate>& OutCandidates)
 {
 	if (!Unit || !Unit->CanCrouch())
@@ -124,6 +237,13 @@ void EnemyAICandidateBuilder::AddCrouchCandidate(
 	FEnemyActionCandidate Candidate;
 	Candidate.ActionType = EEnemyAIActionType::Crouch;
 	Candidate.TimeUnitCost = Unit->GetCrouchTimeUnitCost();
+	if (GridManager && PlayerSide)
+	{
+		Candidate.TargetCell = GridManager->WorldToGrid(Unit->GetActorLocation());
+		AStrategyUnit* CoverTarget = nullptr;
+		Candidate.CoverScore = GetBestCoverScoreAgainstPlayers(Unit, GridManager, PlayerSide, Candidate.TargetCell, CoverTarget);
+		Candidate.TargetUnit = CoverTarget;
+	}
 
 	OutCandidates.Add(Candidate);
 }
@@ -132,9 +252,63 @@ void EnemyAICandidateBuilder::AddMoveToCoverCandidates(
 	AStrategyUnit* Unit,
 	AGridManager* GridManager,
 	APlayerStrategySide* PlayerSide,
+	AAIStrategySide* EnemySide,
 	TArray<FEnemyActionCandidate>& OutCandidates)
 {
-	ensureMsgf(false, TEXT("AddMoveToCoverCandidates - Not implemented"));
+	if (!Unit || !GridManager || !PlayerSide || !EnemySide)
+	{
+		return;
+	}
+
+	const FIntPoint CurrentCell = GridManager->WorldToGrid(Unit->GetActorLocation());
+	const int32 AvailableMoveRange = FMath::Max(0, Unit->GetRemainingTimeUnits() - Unit->GetCrouchTimeUnitCost());
+	if (AvailableMoveRange <= 0)
+	{
+		return;
+	}
+
+	TArray<FIntPoint> CandidateCells;
+	GridManager->GetCellsInRange(CurrentCell, AvailableMoveRange, CandidateCells);
+
+	TSet<FIntPoint> OccupiedCells;
+	AddOccupiedCells(PlayerSide->Units, Unit, GridManager, OccupiedCells);
+	AddOccupiedCells(EnemySide->Units, Unit, GridManager, OccupiedCells);
+
+	for (const FIntPoint& Cell : CandidateCells)
+	{
+		if (Cell == CurrentCell || OccupiedCells.Contains(Cell))
+		{
+			continue;
+		}
+
+		int32 MoveCost = 0;
+		if (!GridManager->TryGetMoveCostCells(Unit, Cell, MoveCost) || MoveCost > AvailableMoveRange)
+		{
+			continue;
+		}
+
+		AStrategyUnit* CoverTarget = nullptr;
+		const int32 CoverScore = GetBestCoverScoreAgainstPlayers(Unit, GridManager, PlayerSide, Cell, CoverTarget);
+		if (CoverScore <= 0)
+		{
+			continue;
+		}
+
+		FEnemyActionCandidate Candidate;
+		Candidate.ActionType = EEnemyAIActionType::MoveToCover;
+		Candidate.TargetCell = Cell;
+		Candidate.TargetUnit = CoverTarget;
+		Candidate.CoverScore = CoverScore;
+		Candidate.TimeUnitCost = MoveCost;
+
+		if (CoverTarget)
+		{
+			const FIntPoint TargetCell = GridManager->WorldToGrid(CoverTarget->GetActorLocation());
+			Candidate.DistanceToTargetAfterMove = GetManhattanDistance(Cell, TargetCell);
+		}
+
+		OutCandidates.Add(Candidate);
+	}
 }
 
 void EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(

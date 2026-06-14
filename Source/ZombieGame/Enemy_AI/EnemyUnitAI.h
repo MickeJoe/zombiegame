@@ -23,10 +23,11 @@ enum class EEnemyAIActionType : uint8
 
 struct FEnemyActionCandidate
 {
-	EEnemyAIActionType ActionType;
-	FIntPoint TargetCell;
+	EEnemyAIActionType ActionType = EEnemyAIActionType::Wait;
+	FIntPoint TargetCell = FIntPoint::ZeroValue;
 	TObjectPtr<AStrategyUnit> TargetUnit = nullptr;
 	int32 DistanceToTargetAfterMove = 0;
+	int32 CoverScore = 0;
 	float Score = 0.f;
 	int32 TimeUnitCost = 1;
 };
@@ -65,6 +66,8 @@ public:
 
 	UFUNCTION()
 	void OnActionCompleted(AStrategyUnit* ActionUnit);
+
+	void CompleteActionAndFinishTurn(AStrategyUnit* ActionUnit);
 	
 protected:
 	virtual void GenerateCandidates(

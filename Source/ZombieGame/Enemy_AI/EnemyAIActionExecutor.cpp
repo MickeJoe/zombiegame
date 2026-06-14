@@ -116,7 +116,7 @@ void FEnemyAIActionExecutor::ExecuteCrouch(
 		FTimerHandle CrouchActionCompleteTimerHandle;
 		Unit->GetWorldTimerManager().SetTimer(
 			CrouchActionCompleteTimerHandle,
-			FTimerDelegate::CreateUObject(OwnerAI, &UEnemyUnitAI::OnActionCompleted, Unit),
+			FTimerDelegate::CreateUObject(OwnerAI, &UEnemyUnitAI::CompleteActionAndFinishTurn, Unit),
 			ActionDelay,
 			false);
 	}

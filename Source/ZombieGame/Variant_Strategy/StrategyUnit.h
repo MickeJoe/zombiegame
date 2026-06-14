@@ -206,6 +206,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Unit Data")
 	TObjectPtr<UUnitData> UnitData;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI", meta=(DisplayName="Enemy AI Class Override"))
+	TSubclassOf<UEnemyUnitAI> EnemyAIClassOverride;
+
 	void SpendTimeUnits(int32 TimeUnits);
 	int32 GetRemainingTimeUnits() const;
 	void ResetTimeUnits();

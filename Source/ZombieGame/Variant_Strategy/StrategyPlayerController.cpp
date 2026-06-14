@@ -24,6 +24,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Player/AIStrategySide.h"
 #include "Player/PlayerStrategySide.h"
+#include "Player/StrategySide.h"
 #include "Systems/GridManager.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Data/Weapon/AttackStats.h"
@@ -178,6 +179,12 @@ void AStrategyPlayerController::HandleEndTurnClicked()
 {
 	if (AStrategyGameMode* GM = GetWorld()->GetAuthGameMode<AStrategyGameMode>())
 	{
+		AStrategySide* ActiveSide = GM->GetActiveSide();
+		if (!ActiveSide || !ActiveSide->IsHuman())
+		{
+			return;
+		}
+
 		GM->EndTurn();
 	}
 }
@@ -192,7 +199,10 @@ void AStrategyPlayerController::ShowTurnBanner(ETurnOwner TurnOwner)
 
 void AStrategyPlayerController::SetPlayerEndTurnButtonEnabled(bool bIsEnabledIn)
 {
-	EndTurnWidget->SetPlayerEndTurnButtonEnabled(bIsEnabledIn);
+	if (EndTurnWidget)
+	{
+		EndTurnWidget->SetPlayerEndTurnButtonEnabled(bIsEnabledIn);
+	}
 }
 
 void AStrategyPlayerController::SetupInputComponent()

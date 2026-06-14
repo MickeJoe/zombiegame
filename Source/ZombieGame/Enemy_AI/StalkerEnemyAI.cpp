@@ -20,7 +20,10 @@ void UStalkerEnemyAI::GenerateCandidates(
 		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddCrouchCandidate(
-		Unit, OutCandidates);
+		Unit, GridManager, PlayerSide, OutCandidates);
+
+	EnemyAICandidateBuilder::AddMoveToCoverCandidates(
+		Unit, GridManager, PlayerSide, EnemySide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
 		Unit, GridManager, SightManager, PlayerSide, EnemySide, OutCandidates);
@@ -33,7 +36,8 @@ FEnemyAIWeights UStalkerEnemyAI::GetAIWeights() const
 	FEnemyAIWeights Weights;
 
 	Weights.BiteAttack = 120.f;
-	Weights.Crouch = 15.f;
+	Weights.Crouch = 25.f;
+	Weights.Cover = 80.f;
 	Weights.MoveTowardTarget = 60.f;
 	Weights.DistanceToTarget = -10.f;
 	Weights.CanInfect = 50.f;

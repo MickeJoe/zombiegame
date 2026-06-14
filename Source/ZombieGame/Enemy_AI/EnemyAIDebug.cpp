@@ -6,11 +6,22 @@
 #include "StrategyUnit.h"
 #include "ZombieGame.h"
 #include "Engine/Engine.h"
+#include "HAL/IConsoleManager.h"
 #include "Systems/AttackHandling/StrategyAttackResolver.h"
 
 namespace
 {
 	bool bEnemyAIDebugEnabled = false;
+
+	static TAutoConsoleVariable<int32> CVarEnemyAIDebug(
+		TEXT("zg.EnemyAIDebug"),
+		0,
+		TEXT("Enables Enemy AI decision logging and on-screen debug messages."));
+
+	bool IsEnemyAIDebugEnabled()
+	{
+		return bEnemyAIDebugEnabled || CVarEnemyAIDebug.GetValueOnGameThread() != 0;
+	}
 
 	FString GetActionName(EEnemyAIActionType ActionType)
 	{
@@ -53,14 +64,24 @@ namespace
 
 	FString DescribeCandidate(const FEnemyActionCandidate& Candidate)
 	{
+		if (Candidate.ActionType == EEnemyAIActionType::Crouch)
+		{
+			return FString::Printf(
+				TEXT("%s Score=%.1f TUCost=%d"),
+				*GetActionName(Candidate.ActionType),
+				Candidate.Score,
+				Candidate.TimeUnitCost);
+		}
+
 		return FString::Printf(
-			TEXT("%s Score=%.1f TUCost=%d TargetCell=(%d,%d) DistAfter=%d Target=%s"),
+			TEXT("%s Score=%.1f TUCost=%d TargetCell=(%d,%d) DistAfter=%d CoverScore=%d Target=%s"),
 			*GetActionName(Candidate.ActionType),
 			Candidate.Score,
 			Candidate.TimeUnitCost,
 			Candidate.TargetCell.X,
 			Candidate.TargetCell.Y,
 			Candidate.DistanceToTargetAfterMove,
+			Candidate.CoverScore,
 			*GetNameSafe(Candidate.TargetUnit));
 	}
 }
@@ -73,12 +94,12 @@ void FEnemyAIDebug::SetEnabled(bool bEnabled)
 
 bool FEnemyAIDebug::IsEnabled()
 {
-	return bEnemyAIDebugEnabled;
+	return IsEnemyAIDebugEnabled();
 }
 
 void FEnemyAIDebug::LogTurnStart(const AStrategyUnit* Unit)
 {
-	if (!bEnemyAIDebugEnabled || !Unit)
+	if (!IsEnemyAIDebugEnabled() || !Unit)
 	{
 		return;
 	}
@@ -94,7 +115,7 @@ void FEnemyAIDebug::LogTurnStart(const AStrategyUnit* Unit)
 
 void FEnemyAIDebug::LogCandidates(const AStrategyUnit* Unit, const TArray<FEnemyActionCandidate>& Candidates)
 {
-	if (!bEnemyAIDebugEnabled || !Unit)
+	if (!IsEnemyAIDebugEnabled() || !Unit)
 	{
 		return;
 	}
@@ -116,7 +137,7 @@ void FEnemyAIDebug::LogCandidates(const AStrategyUnit* Unit, const TArray<FEnemy
 
 void FEnemyAIDebug::LogSelectedAction(const AStrategyUnit* Unit, const FEnemyActionCandidate& Candidate)
 {
-	if (!bEnemyAIDebugEnabled || !Unit)
+	if (!IsEnemyAIDebugEnabled() || !Unit)
 	{
 		return;
 	}
@@ -133,7 +154,7 @@ void FEnemyAIDebug::LogActionCompleted(
 	const FEnemyActionCandidate& Candidate,
 	int32 RemainingTimeUnitsBeforeSpend)
 {
-	if (!bEnemyAIDebugEnabled || !Unit)
+	if (!IsEnemyAIDebugEnabled() || !Unit)
 	{
 		return;
 	}
@@ -154,7 +175,7 @@ void FEnemyAIDebug::LogBiteAttackResult(
 	int32 TargetHealthBefore,
 	int32 TargetArmorBefore)
 {
-	if (!bEnemyAIDebugEnabled || !Unit || !Candidate.TargetUnit)
+	if (!IsEnemyAIDebugEnabled() || !Unit || !Candidate.TargetUnit)
 	{
 		return;
 	}

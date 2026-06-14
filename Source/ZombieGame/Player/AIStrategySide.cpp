@@ -5,6 +5,7 @@
 #include "../Variant_Strategy/StrategyUnit.h"
 #include "Enemy_AI/WalkerEnemyAI.h"
 #include "Systems/SightManager.h"
+#include "ZombieGame.h"
 
 void AAIStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* SightManager, APlayerStrategySide* PlayerSide)
 {
@@ -35,6 +36,13 @@ void AAIStrategySide::StartNextEnemyUnitTurn()
 
 		if (!IsValid(Unit) || Unit->GetCurrentHealth() <= 0 || !Unit->GetEnemyAI())
 		{
+			UE_LOG(LogZombieGame, Warning,
+				TEXT("EnemyTurn: skipping unit at active turn index %d. Unit=%s IsValid=%d Health=%d EnemyAI=%s"),
+				CurrentUnitIndex - 1,
+				*GetNameSafe(Unit),
+				IsValid(Unit) ? 1 : 0,
+				IsValid(Unit) ? Unit->GetCurrentHealth() : 0,
+				IsValid(Unit) ? *GetNameSafe(Unit->GetEnemyAI()) : TEXT("None"));
 			continue;
 		}
 

@@ -22,7 +22,7 @@ void UWalkerEnemyAI::GenerateCandidates(
 		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddCrouchCandidate(
-		Unit, OutCandidates);
+		Unit, GridManager, PlayerSide, OutCandidates);
 
 	EnemyAICandidateBuilder::AddMoveTowardNearestVisiblePlayerCandidate(
 		Unit, GridManager, SightManager, PlayerSide, EnemySide, OutCandidates);
@@ -35,7 +35,7 @@ FEnemyAIWeights UWalkerEnemyAI::GetAIWeights() const
 	FEnemyAIWeights Weights;
 
 	Weights.BiteAttack = 120.f;
-	Weights.Crouch = 15.f;
+	Weights.Crouch = 0.f;
 	Weights.MoveTowardTarget = 60.f;
 	Weights.DistanceToTarget = -10.f;
 	Weights.CanInfect = 50.f;

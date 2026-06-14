@@ -18,12 +18,15 @@ public:
 
 	static void AddCrouchCandidate(
 		AStrategyUnit* Unit,
+		AGridManager* GridManager,
+		APlayerStrategySide* PlayerSide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
 	
 	static void AddMoveToCoverCandidates(
 		AStrategyUnit* Unit,
 		AGridManager* GridManager,
 		APlayerStrategySide* PlayerSide,
+		AAIStrategySide* EnemySide,
 		TArray<FEnemyActionCandidate>& OutCandidates);
 
 	static void AddMoveTowardNearestVisiblePlayerCandidate(
