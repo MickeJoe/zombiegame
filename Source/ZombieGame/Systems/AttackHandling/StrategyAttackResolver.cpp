@@ -23,7 +23,7 @@ namespace
 		return nullptr;
 	}
 
-	FIntPoint GetDominantGridDirection(const FIntPoint& FromCell, const FIntPoint& ToCell)
+	FIntPoint GetAttackDominantGridDirection(const FIntPoint& FromCell, const FIntPoint& ToCell)
 	{
 		const int32 DeltaX = ToCell.X - FromCell.X;
 		const int32 DeltaY = ToCell.Y - FromCell.Y;
@@ -54,7 +54,7 @@ namespace
 			? Context.OverrideAttackerCell
 			: GridManager->WorldToGrid(Context.Attacker->GetActorLocation());
 		const FIntPoint TargetCell = GridManager->WorldToGrid(Context.Target->GetActorLocation());
-		const FIntPoint Direction = GetDominantGridDirection(TargetCell, AttackerCell);
+		const FIntPoint Direction = GetAttackDominantGridDirection(TargetCell, AttackerCell);
 		if (Direction == FIntPoint::ZeroValue)
 		{
 			return false;

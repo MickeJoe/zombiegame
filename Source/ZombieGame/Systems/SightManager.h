@@ -77,6 +77,11 @@ private:
 
 	void FindGridManager();
 	int32 GetSightRangeForUnit(const AStrategyUnit* Unit) const;
+	bool TraceSightToCell(
+		const AStrategyUnit* Unit,
+		const FIntPoint& Cell,
+		FHitResult* OutHit = nullptr,
+		FString* OutFailureReason = nullptr) const;
 	void UpdateSightForUnits(
 		const TArray<AStrategyUnit*>& Units,
 		TSet<FIntPoint>& OutVisibleCells,

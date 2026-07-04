@@ -17,11 +17,58 @@
 #include "Systems/SightManager.h"
 #include "Systems/GridManager.h"
 #include "Systems/AttackHandling/StrategyWeaponInstance.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Data/Unit/UnitData.h"
 
 #include "ZombieGame/Variant_Strategy/StrategyUnit.h"
 #include "ZombieGame.h"
 
 PRAGMA_DISABLE_OPTIMIZATION
+
+namespace
+{
+	FString FormatCellForSpawnDebug(const AGridManager* GridManager, const AStrategyUnit* Unit)
+	{
+		if (!GridManager || !Unit)
+		{
+			return TEXT("(no-grid)");
+		}
+
+		const FIntPoint Cell = GridManager->WorldToGrid(Unit->GetActorLocation());
+		return FString::Printf(TEXT("(%d,%d)"), Cell.X, Cell.Y);
+	}
+
+	FString DescribeUnitForSpawnDebug(const AStrategyUnit* Unit, const AGridManager* GridManager)
+	{
+		if (!Unit)
+		{
+			return TEXT("Unit=null");
+		}
+
+		USkeletalMeshComponent* MeshComponent = Unit->GetMesh();
+		return FString::Printf(
+			TEXT("Unit=%s Class=%s Cell=%s Loc=%s Rot=%s Hidden=%d Collision=%d MeshComp=%s Mesh=%s AnimClass=%s Materials=%d MeshVisible=%d MeshHiddenInGame=%d UnitData=%s SightRange=%d HP=%d/%d TU=%d/%d"),
+			*GetNameSafe(Unit),
+			*GetNameSafe(Unit->GetClass()),
+			*FormatCellForSpawnDebug(GridManager, Unit),
+			*Unit->GetActorLocation().ToCompactString(),
+			*Unit->GetActorRotation().ToCompactString(),
+			Unit->IsHidden() ? 1 : 0,
+			Unit->GetActorEnableCollision() ? 1 : 0,
+			*GetNameSafe(MeshComponent),
+			*GetNameSafe(MeshComponent ? MeshComponent->GetSkeletalMeshAsset() : nullptr),
+			*GetNameSafe(MeshComponent ? MeshComponent->GetAnimClass() : nullptr),
+			MeshComponent ? MeshComponent->GetNumMaterials() : 0,
+			MeshComponent && MeshComponent->IsVisible() ? 1 : 0,
+			MeshComponent && MeshComponent->bHiddenInGame ? 1 : 0,
+			*GetNameSafe(Unit->UnitData.Get()),
+			Unit->GetSightRange(),
+			Unit->GetCurrentHealth(),
+			Unit->GetMaxHealth(),
+			Unit->GetRemainingTimeUnits(),
+			Unit->GetMaxTimeUnits());
+	}
+}
 
 AStrategyGameMode::AStrategyGameMode()
 {
@@ -38,6 +85,15 @@ void AStrategyGameMode::BeginPlay()
 	UWorld* World = GetWorld();
 	if (!World) return;
 
+	UE_LOG(LogZombieGame, Warning, TEXT("SpawnDebug: BeginPlay World=%s NetMode=%d GameMode=%s PlayerSideClass=%s EnemySideClass=%s PlayerUnitClass=%s EnemyUnitClass=%s"),
+		*GetNameSafe(World),
+		static_cast<int32>(World->GetNetMode()),
+		*GetNameSafe(this),
+		*GetNameSafe(PlayerSideClass.Get()),
+		*GetNameSafe(EnemySideClass.Get()),
+		*GetNameSafe(PlayerUnitClass.Get()),
+		*GetNameSafe(EnemyUnitClass.Get()));
+
 	PlayerSide = World->SpawnActor<APlayerStrategySide>(PlayerSideClass);
 	EnemySide = World->SpawnActor<AAIStrategySide>(EnemySideClass);
 	
@@ -51,6 +107,11 @@ void AStrategyGameMode::BeginPlay()
 	
 	SetupSpawnPoints();
 	SpawnUnits();
+	UE_LOG(LogZombieGame, Warning, TEXT("SpawnDebug: Spawn complete PlayerUnits=%d EnemyUnits=%d SightManager=%s GridManager=%s"),
+		PlayerSide ? PlayerSide->Units.Num() : 0,
+		EnemySide ? EnemySide->Units.Num() : 0,
+		*GetNameSafe(SightManager),
+		*GetNameSafe(GridManager));
 	SightManager->SetUnits(PlayerSide->Units, EnemySide->Units);
 //	StartMatchFlow();
 	OnMatchReady.AddDynamic(this, &AStrategyGameMode::StartMatchFlow);
@@ -89,6 +150,10 @@ void AStrategyGameMode::SetupSpawnPoints()
 
 	PlayerSpawns.Sort(SortBySpawnOrder);
 	EnemySpawns.Sort(SortBySpawnOrder);
+
+	UE_LOG(LogZombieGame, Warning, TEXT("SpawnDebug: SpawnPoints Player=%d Enemy=%d"),
+		PlayerSpawns.Num(),
+		EnemySpawns.Num());
 }
 
 FTransform AStrategyGameMode::GetProjectedSpawnTransform(
@@ -176,6 +241,20 @@ void AStrategyGameMode::SpawnUnits()
 		}
 		PlayerSide->AddUnit(Unit);
 		BindUnitOverwatchMovement(Unit);
+
+		UE_LOG(LogZombieGame, Warning, TEXT("SpawnDebug: Player spawned Index=%d Spawn=%s SpawnLoc=%s UnitClass=%s %s"),
+			Index,
+			*GetNameSafe(Spawn),
+			*Spawn->GetActorLocation().ToCompactString(),
+			*GetNameSafe(UnitClass.Get()),
+			*DescribeUnitForSpawnDebug(Unit, GridManager));
+
+		if (!Unit->GetMesh() || !Unit->GetMesh()->GetSkeletalMeshAsset())
+		{
+			UE_LOG(LogZombieGame, Error, TEXT("SpawnDebug: Player %s has no skeletal mesh after spawn. ConfiguredClass=%s"),
+				*GetNameSafe(Unit),
+				*GetNameSafe(UnitClass.Get()));
+		}
 	}
 
 	const int32 EnemyUnitCount = EnemyUnitClasses.Num() > 0
@@ -217,6 +296,20 @@ void AStrategyGameMode::SpawnUnits()
 		Unit->SetStrategyUnitTeam(EStrategyUnitTeam::AI);
 		EnemySide->AddUnit(Unit);
 		BindUnitOverwatchMovement(Unit);
+
+		UE_LOG(LogZombieGame, Warning, TEXT("SpawnDebug: Enemy spawned Index=%d Spawn=%s SpawnLoc=%s UnitClass=%s %s"),
+			Index,
+			*GetNameSafe(Spawn),
+			*Spawn->GetActorLocation().ToCompactString(),
+			*GetNameSafe(UnitClass.Get()),
+			*DescribeUnitForSpawnDebug(Unit, GridManager));
+
+		if (!Unit->GetMesh() || !Unit->GetMesh()->GetSkeletalMeshAsset())
+		{
+			UE_LOG(LogZombieGame, Error, TEXT("SpawnDebug: Enemy %s has no skeletal mesh after spawn. ConfiguredClass=%s"),
+				*GetNameSafe(Unit),
+				*GetNameSafe(UnitClass.Get()));
+		}
 	}
 }
 /*

@@ -1,4 +1,4 @@
-﻿#include "SightManager.h"
+#include "SightManager.h"
 
 #include "GridManager.h"
 #include "StrategyUnit.h"
@@ -7,6 +7,41 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "Components/SkeletalMeshComponent.h"
+
+#include "ZombieGame.h"
+
+namespace
+{
+	FString FormatCell(const FIntPoint& Cell)
+	{
+		return FString::Printf(TEXT("(%d,%d)"), Cell.X, Cell.Y);
+	}
+
+	FString DescribeUnitForSightDebug(const AStrategyUnit* Unit)
+	{
+		if (!Unit)
+		{
+			return TEXT("Unit=null");
+		}
+
+		USkeletalMeshComponent* MeshComponent = Unit->GetMesh();
+		return FString::Printf(
+			TEXT("Unit=%s Class=%s Loc=%s Hidden=%d ActorHidden=%d Collision=%d MeshComp=%s Mesh=%s AnimClass=%s Materials=%d MeshVisible=%d MeshHiddenInGame=%d"),
+			*GetNameSafe(Unit),
+			*GetNameSafe(Unit->GetClass()),
+			*Unit->GetActorLocation().ToCompactString(),
+			Unit->IsHidden() ? 1 : 0,
+			Unit->IsHidden() ? 1 : 0,
+			Unit->GetActorEnableCollision() ? 1 : 0,
+			*GetNameSafe(MeshComponent),
+			*GetNameSafe(MeshComponent ? MeshComponent->GetSkeletalMeshAsset() : nullptr),
+			*GetNameSafe(MeshComponent ? MeshComponent->GetAnimClass() : nullptr),
+			MeshComponent ? MeshComponent->GetNumMaterials() : 0,
+			MeshComponent && MeshComponent->IsVisible() ? 1 : 0,
+			MeshComponent && MeshComponent->bHiddenInGame ? 1 : 0);
+	}
+}
 
 ASightManager::ASightManager()
 {
@@ -46,9 +81,24 @@ void ASightManager::SetUnits(
 	PlayerUnits = InPlayerUnits;
 	EnemyUnits = InEnemyUnits;
 
+	UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: SetUnits Players=%d Enemies=%d Grid=%s Fog=%s FogDisabled=%d"),
+		PlayerUnits.Num(),
+		EnemyUnits.Num(),
+		*GetNameSafe(GridManager),
+		*GetNameSafe(FogOfWarActor),
+		bFogDisabled ? 1 : 0);
+
 	for (AStrategyUnit* Unit : PlayerUnits)
 	{
 		RegisterUnit(Unit);
+		UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: Player registered %s"),
+			*DescribeUnitForSightDebug(Unit));
+	}
+
+	for (AStrategyUnit* Unit : EnemyUnits)
+	{
+		UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: Enemy registered %s"),
+			*DescribeUnitForSightDebug(Unit));
 	}
 
 	UpdateSightAndFog();
@@ -116,6 +166,14 @@ void ASightManager::UpdateSightForUnits(
 				OutExploredCells.Add(Cell);
 			}
 		}
+
+		UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: UnitSight %s Cell=%s SightRange=%d CellsInRange=%d VisibleTotal=%d ExploredTotal=%d"),
+			*GetNameSafe(Unit),
+			*FormatCell(UnitCell),
+			SightRange,
+			CellsInRange.Num(),
+			OutVisibleCells.Num(),
+			OutExploredCells.Num());
 	}
 }
 
@@ -141,8 +199,46 @@ void ASightManager::UpdateEnemyVisibility() const
 		const FIntPoint EnemyCell = GridManager->WorldToGrid(Enemy->GetActorLocation());
 		const bool bVisible = IsCellVisible(EnemyCell);
 
+		UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: EnemyVisibility Before VisibleCell=%d Cell=%s VisibleCells=%d %s"),
+			bVisible ? 1 : 0,
+			*FormatCell(EnemyCell),
+			VisibleCells.Num(),
+			*DescribeUnitForSightDebug(Enemy));
+
+		if (!bVisible)
+		{
+			for (const AStrategyUnit* PlayerUnit : PlayerUnits)
+			{
+				if (!PlayerUnit)
+				{
+					continue;
+				}
+
+				FHitResult Hit;
+				FString FailureReason;
+				const bool bPlayerCanSeeEnemyCell = TraceSightToCell(PlayerUnit, EnemyCell, &Hit, &FailureReason);
+				const FIntPoint PlayerCell = GridManager->WorldToGrid(PlayerUnit->GetActorLocation());
+				UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: EnemyHiddenReason Enemy=%s EnemyCell=%s Player=%s PlayerCell=%s CanSeeEnemyCell=%d Reason=%s HitActor=%s HitComponent=%s HitLocation=%s"),
+					*GetNameSafe(Enemy),
+					*FormatCell(EnemyCell),
+					*GetNameSafe(PlayerUnit),
+					*FormatCell(PlayerCell),
+					bPlayerCanSeeEnemyCell ? 1 : 0,
+					*FailureReason,
+					*GetNameSafe(Hit.GetActor()),
+					*GetNameSafe(Hit.GetComponent()),
+					*Hit.Location.ToCompactString());
+			}
+		}
+
 		Enemy->SetActorHiddenInGame(!bVisible);
-		Enemy->SetActorEnableCollision(bVisible);
+		// Keep collision enabled while hidden so characters do not fall through the level under fog of war.
+		Enemy->SetActorEnableCollision(true);
+
+		UE_LOG(LogZombieGame, Warning, TEXT("SightDebug: EnemyVisibility After VisibleCell=%d Cell=%s %s"),
+			bVisible ? 1 : 0,
+			*FormatCell(EnemyCell),
+			*DescribeUnitForSightDebug(Enemy));
 	}
 }
 
@@ -158,13 +254,32 @@ bool ASightManager::IsCellExplored(const FIntPoint& Cell) const
 
 bool ASightManager::CanSeeCell(const AStrategyUnit* Unit, const FIntPoint& Cell) const
 {
+	return TraceSightToCell(Unit, Cell);
+}
+
+bool ASightManager::TraceSightToCell(
+	const AStrategyUnit* Unit,
+	const FIntPoint& Cell,
+	FHitResult* OutHit,
+	FString* OutFailureReason) const
+{
 	if (!Unit || !GridManager)
 	{
+		if (OutFailureReason)
+		{
+			*OutFailureReason = FString::Printf(TEXT("Invalid input Unit=%s Grid=%s"),
+				*GetNameSafe(Unit),
+				*GetNameSafe(GridManager));
+		}
 		return false;
 	}
 
 	if (!GridManager->IsValidCell(Cell))
 	{
+		if (OutFailureReason)
+		{
+			*OutFailureReason = TEXT("Invalid grid cell");
+		}
 		return false;
 	}
 
@@ -173,6 +288,10 @@ bool ASightManager::CanSeeCell(const AStrategyUnit* Unit, const FIntPoint& Cell)
 
 	if (!GridManager->ProjectCellToGround(Cell, GroundLocation, GroundNormal))
 	{
+		if (OutFailureReason)
+		{
+			*OutFailureReason = TEXT("ProjectCellToGround failed");
+		}
 		return false;
 	}
 
@@ -184,6 +303,20 @@ bool ASightManager::CanSeeCell(const AStrategyUnit* Unit, const FIntPoint& Cell)
 	Params.AddIgnoredActor(Unit);
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(GridManager);
+	for (const AStrategyUnit* PlayerUnit : PlayerUnits)
+	{
+		if (PlayerUnit)
+		{
+			Params.AddIgnoredActor(PlayerUnit);
+		}
+	}
+	for (const AStrategyUnit* EnemyUnit : EnemyUnits)
+	{
+		if (EnemyUnit)
+		{
+			Params.AddIgnoredActor(EnemyUnit);
+		}
+	}
 
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(
 		Hit,
@@ -192,6 +325,24 @@ bool ASightManager::CanSeeCell(const AStrategyUnit* Unit, const FIntPoint& Cell)
 		SightTraceChannel,
 		Params
 	);
+
+	if (OutHit)
+	{
+		*OutHit = Hit;
+	}
+
+	if (OutFailureReason)
+	{
+		*OutFailureReason = bHit
+			? FString::Printf(TEXT("Blocked From=%s To=%s Channel=%d"),
+				*From.ToCompactString(),
+				*To.ToCompactString(),
+				static_cast<int32>(SightTraceChannel.GetValue()))
+			: FString::Printf(TEXT("Clear From=%s To=%s Channel=%d"),
+				*From.ToCompactString(),
+				*To.ToCompactString(),
+				static_cast<int32>(SightTraceChannel.GetValue()));
+	}
 
 	return !bHit;
 }
@@ -224,3 +375,6 @@ void ASightManager::RefreshFog()
 		ExploredCells
 	);
 };
+
+
+

@@ -194,6 +194,11 @@ bool AGridManager::IsCellOnNavMesh(
     FNavLocation* OutLocation
 ) const
 {
+    if (!IsValidCell(Cell))
+    {
+        return false;
+    }
+
     UWorld* World = GetWorld();
     if (!World)
     {
