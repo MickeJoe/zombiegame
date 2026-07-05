@@ -13,6 +13,7 @@
 #include "StrategyGameMode.h"
 #include "StrategyPlayerController.h"
 #include "Player/StrategySide.h"
+#include "Systems/AttackHandling/StrategyAttackResolver.h"
 #include "UI/TargetingUI/StrategyTargetingComponent.h"
 #include "UI/TargetingUI/TargetInfoWidget.h"
 #include "UnitStatusBarWidget.h"
@@ -207,7 +208,11 @@ void AStrategyUnit::NotifyControllerChanged()
 
 void AStrategyUnit::StopMoving()
 {
-	// use the character movement component to stop movement
+	if (AIController)
+	{
+		AIController->StopMovement();
+	}
+
 	GetCharacterMovement()->StopMovementImmediately();
 }
 
@@ -832,9 +837,16 @@ void AStrategyUnit::ReloadWeapon()
 bool AStrategyUnit::CanOverwatch() const
 {
 	const FStrategyWeaponInstance& FireWeapon = GetEquippedFireWeapon();
-	return GetRemainingTimeUnits() > 0
-		&& FireWeapon.WeaponData
-		&& FireWeapon.GetAttackStats();
+	const FAttackStats* AttackStats = FireWeapon.GetAttackStats();
+	if (GetRemainingTimeUnits() <= 0 || !FireWeapon.WeaponData || !AttackStats)
+	{
+		return false;
+	}
+
+	const int32 AmmoCost = FireWeapon.UsesAmmo()
+		? FMath::Max(AttackStats->AmmoCost, 1)
+		: 0;
+	return !FireWeapon.UsesAmmo() || FireWeapon.CurrentAmmo >= AmmoCost;
 }
 
 bool AStrategyUnit::CanCrouch() const
@@ -966,17 +978,45 @@ bool AStrategyUnit::TryFireOverwatchAt(AStrategyUnit* Target)
 		return false;
 	}
 
-	FWeaponDamage Damage;
-	Damage.Damage = AttackStats->Damage;
-	Damage.ArmorPierce = AttackStats->ArmorPenetration;
-	Damage.ArmorShred = AttackStats->ArmorShred;
+	const int32 AmmoCost = FireWeapon->UsesAmmo()
+		? FMath::Max(AttackStats->AmmoCost, 1)
+		: 0;
+	if (FireWeapon->UsesAmmo() && FireWeapon->CurrentAmmo < AmmoCost)
+	{
+		ClearOverwatch();
+		return false;
+	}
+
+	FaceTargetForAttack(Target);
+	const FStrategyAttackContext Context =
+		UStrategyAttackResolver::MakeContextWithAttackStats(this, Target, AttackStats);
+	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
+	PlayWeaponAttackMontage(*FireWeapon);
+
+	UE_LOG(LogTemp, Log, TEXT("Overwatch: %s fired at %s. Result=%s HitChance=%d Crit=%d Damage=%d ArmorPierce=%d ArmorShred=%d"),
+		*GetNameSafe(this),
+		*GetNameSafe(Target),
+		Result.bHit ? TEXT("Hit") : TEXT("Miss"),
+		Result.HitChance,
+		Result.bCritical ? 1 : 0,
+		Result.Damage.Damage,
+		Result.Damage.ArmorPierce,
+		Result.Damage.ArmorShred);
+
+	if (Result.bHit && IsValid(Target) && Target->GetCurrentHealth() > 0)
+	{
+		Target->StopMoving();
+		Target->SpendTimeUnits(Target->GetRemainingTimeUnits());
+
+		UE_LOG(LogTemp, Log, TEXT("Overwatch: %s was hit and stopped. Remaining TU drained."),
+			*GetNameSafe(Target));
+	}
 
 	if (FireWeapon->UsesAmmo())
 	{
-		FireWeapon->CurrentAmmo = FMath::Max(FireWeapon->CurrentAmmo - 1, 0);
+		FireWeapon->CurrentAmmo = FMath::Max(FireWeapon->CurrentAmmo - AmmoCost, 0);
 	}
 
-	Target->ApplyDamage(Damage);
 	ClearOverwatch();
 	return true;
 }

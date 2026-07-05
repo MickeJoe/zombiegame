@@ -20,6 +20,19 @@ namespace
 	const FLinearColor WeaponCardSelectedBorderColor(0.0f, 0.92f, 0.88f, 1.0f);
 	const FLinearColor WeaponInfoAccentYellow(1.0f, 0.72f, 0.02f, 1.0f);
 
+	bool ShouldShowAmmo(const FStrategyWeaponInstance& Weapon)
+	{
+		return Weapon.UsesAmmo() && Weapon.GetMaxAmmo() > 0;
+	}
+
+	FText GetAmmoDisplayText(const FStrategyWeaponInstance& Weapon)
+	{
+		return FText::Format(
+			FText::FromString(TEXT("{0}/{1}")),
+			FText::AsNumber(FMath::Max(Weapon.CurrentAmmo, 0)),
+			FText::AsNumber(FMath::Max(Weapon.GetMaxAmmo(), 0)));
+	}
+
 	FText GetItemDisplayName(UEquippableItemData* ItemData)
 	{
 		FString DisplayName = TEXT("Empty");
@@ -44,11 +57,11 @@ void SWeaponInfoSlateWidget::Construct(const FArguments& InArgs)
 		+ SConstraintCanvas::Slot()
 		.Anchors(FAnchors(0.0f, 1.0f))
 		.Alignment(FVector2D(0.0f, 1.0f))
-		.Offset(FMargin(28.0f, -36.0f, 286.0f, 166.0f))
+		.Offset(FMargin(28.0f, -36.0f, 286.0f, 190.0f))
 		[
 			SNew(SBox)
 			.WidthOverride(286.0f)
-			.HeightOverride(166.0f)
+			.HeightOverride(190.0f)
 			[
 				SAssignNew(WeaponListBox, SVerticalBox)
 			]
@@ -100,13 +113,14 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 
 	UStrategyWeaponData* WeaponData = Weapon.WeaponData;
 	const bool bSelected = SelectedUnit && SelectedUnit->GetActiveWeaponSlot() == WeaponSlot;
+	const bool bShowAmmo = ShouldShowAmmo(Weapon);
 
 	TSharedPtr<FSlateBrush> IconBrush;
 	if (ItemData && ItemData->Icon)
 	{
 		IconBrush = MakeShared<FSlateBrush>();
 		IconBrush->SetResourceObject(ItemData->Icon);
-		IconBrush->ImageSize = FVector2D(148.0f, 42.0f);
+		IconBrush->ImageSize = FVector2D(138.0f, 38.0f);
 		IconBrush->DrawAs = ESlateBrushDrawType::Image;
 		WeaponIconBrushes.Add(IconBrush);
 	}
@@ -132,7 +146,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 				.Padding(FMargin(10.0f, 5.0f, 10.0f, 6.0f))
 				[
 					SNew(SBox)
-					.HeightOverride(72.0f)
+					.HeightOverride(84.0f)
 					[
 						SNew(SVerticalBox)
 
@@ -157,8 +171,8 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 							.VAlign(VAlign_Center)
 							[
 								SNew(SBox)
-								.WidthOverride(148.0f)
-								.HeightOverride(42.0f)
+								.WidthOverride(138.0f)
+								.HeightOverride(38.0f)
 								[
 									SNew(SImage)
 									.Image(IconBrush.IsValid() ? IconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
@@ -171,7 +185,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 							+ SHorizontalBox::Slot()
 							.AutoWidth()
 							.VAlign(VAlign_Top)
-							.Padding(8.0f, -1.0f, 0.0f, 0.0f)
+							.Padding(8.0f, -3.0f, 0.0f, 0.0f)
 							[
 								SNew(SVerticalBox)
 								+ SVerticalBox::Slot()
@@ -182,7 +196,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 										FText::FromString(TEXT("DMG {0}")),
 										FText::AsNumber(WeaponData ? WeaponData->AttackStats.Damage : 0)))
 									.ColorAndOpacity(WeaponInfoAccentYellow)
-									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								]
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -192,7 +206,18 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 										FText::FromString(TEXT("RNG {0}")),
 										FText::AsNumber(ItemData ? ItemData->Range : 0)))
 									.ColorAndOpacity(WeaponInfoAccentYellow)
-									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+								]
+								+ SVerticalBox::Slot()
+								.AutoHeight()
+								[
+									SNew(STextBlock)
+									.Visibility(bShowAmmo ? EVisibility::Visible : EVisibility::Collapsed)
+									.Text(FText::Format(
+										FText::FromString(TEXT("AMMO {0}")),
+										GetAmmoDisplayText(Weapon)))
+									.ColorAndOpacity(WeaponInfoAccentYellow)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								]
 								+ SVerticalBox::Slot()
 								.AutoHeight()
@@ -202,7 +227,7 @@ void SWeaponInfoSlateWidget::AddWeaponRow(
 										FText::FromString(TEXT("TU {0}")),
 										FText::AsNumber(ItemData ? ItemData->TimeUnitCost : 0)))
 									.ColorAndOpacity(WeaponInfoAccentYellow)
-									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								]
 							]
 						]

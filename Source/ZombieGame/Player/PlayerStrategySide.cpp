@@ -22,7 +22,9 @@ void APlayerStrategySide::TakeTurn(AGridManager* GridManager, ASightManager* Sig
 	if (AStrategyPlayerController* PC = GetWorld()->GetFirstPlayerController<AStrategyPlayerController>())
 	{
 		PC->RefreshLockedOverwatchHighlights();
+		PC->RefreshActionBar();
 		PC->RefreshPlayerUnitRoster();
+		PC->RefreshWeaponInfoPanel();
 	}
 }
 
