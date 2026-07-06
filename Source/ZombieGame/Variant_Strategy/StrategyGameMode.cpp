@@ -40,10 +40,23 @@ void AStrategyGameMode::BeginPlay()
 
 	PlayerSide = World->SpawnActor<APlayerStrategySide>(PlayerSideClass);
 	EnemySide = World->SpawnActor<AAIStrategySide>(EnemySideClass);
+
+	if (!PlayerSide || !EnemySide)
+	{
+		UE_LOG(LogTemp, Error, TEXT("StrategyGameMode: failed to spawn strategy sides. PlayerSide=%s EnemySide=%s"),
+			*GetNameSafe(PlayerSide.Get()),
+			*GetNameSafe(EnemySide.Get()));
+		return;
+	}
 	
 	SightManager = Cast<ASightManager>(
 		UGameplayStatics::GetActorOfClass(this, ASightManager::StaticClass())
 	);
+	if (!SightManager)
+	{
+		SightManager = World->SpawnActor<ASightManager>(ASightManager::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+		UE_LOG(LogTemp, Warning, TEXT("StrategyGameMode: spawned fallback SightManager for level %s"), *GetNameSafe(World));
+	}
 	
 	GridManager = Cast<AGridManager>(
 		UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
@@ -51,7 +64,10 @@ void AStrategyGameMode::BeginPlay()
 	
 	SetupSpawnPoints();
 	SpawnUnits();
-	SightManager->SetUnits(PlayerSide->Units, EnemySide->Units);
+	if (SightManager)
+	{
+		SightManager->SetUnits(PlayerSide->Units, EnemySide->Units);
+	}
 //	StartMatchFlow();
 	OnMatchReady.AddDynamic(this, &AStrategyGameMode::StartMatchFlow);
 }

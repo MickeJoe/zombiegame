@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Systems/GridHighlightActor.h"
 #include "UI/TurnBannerWidget.h"
+#include "UI/WeaponDebugSlateWidget.h"
 #include "StrategyPlayerController.generated.h"
 
 enum class EPlayerUnitActionType : uint8;
@@ -184,6 +185,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Camera", meta = (ClampMin = 0, ClampMax = 1000))
 	float ZoomScaling = 100.0f;
 
+	/** Degrees per second used when rotating the strategy camera with keyboard input */
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (ClampMin = 0, ClampMax = 720))
+	float CameraRotationSpeed = 90.0f;
+
 	/** Affects how fast the camera moves while dragging with the mouse */
 	UPROPERTY(EditAnywhere, Category = "Camera", meta = (ClampMin = 0, ClampMax = 10000))
 	float DragMultiplier = 0.1f;
@@ -330,6 +335,9 @@ protected:
 	/** Changes the camera zoom level by the given input */
 	void ZoomCamera(const FInputActionValue& Value);
 
+	/** Rotates the camera around the vertical axis */
+	void RotateCamera(float Direction);
+
 	/** Resets the camera to its initial value */
 	void ResetCamera(const FInputActionValue& Value);
 
@@ -468,6 +476,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Weapons")
 	void DebugEquipWeapon(FName ItemId);
+
+	UFUNCTION(BlueprintCallable, Exec, Category="Debug|Levels")
+	void DebugOpenLevel(FName LevelPackageName);
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
@@ -536,8 +547,11 @@ private:
 	void EnsureWeaponDebugSlateWidget();
 	void UpdateWeaponDebugSlateWidget();
 	void HandleDebugWeaponPicked(UStrategyWeaponData* WeaponData);
+	void HandleDebugLevelPicked(FName LevelPackageName);
 	TArray<AStrategyUnit*> GetWeaponDebugTargetUnits() const;
 	TArray<UStrategyWeaponData*> GetDebugWeapons() const;
+	TArray<FDebugLevelEntry> GetDebugLevels() const;
+	bool IsDebugLevelAllowed(FName LevelPackageName) const;
 	UStrategyWeaponData* FindDebugWeapon(FName ItemId) const;
 	TArray<AStrategyUnit*> GetShootableTargetsFromCell(AStrategyUnit* Unit, const FIntPoint& SourceCell, int32 MovementTimeUnitCost) const;
 	AStrategyUnit* GetHoveredStrategyUnit();

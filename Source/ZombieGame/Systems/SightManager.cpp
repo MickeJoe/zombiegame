@@ -43,8 +43,28 @@ void ASightManager::SetUnits(
 	const TArray<AStrategyUnit*>& InPlayerUnits,
 	const TArray<AStrategyUnit*>& InEnemyUnits)
 {
-	PlayerUnits = InPlayerUnits;
-	EnemyUnits = InEnemyUnits;
+	PlayerUnits.Reset();
+	EnemyUnits.Reset();
+	VisibleCells.Reset();
+	ExploredCells.Reset();
+	EnemyVisibleCells.Reset();
+	EnemyExploredCells.Reset();
+
+	for (AStrategyUnit* Unit : InPlayerUnits)
+	{
+		if (IsValid(Unit))
+		{
+			PlayerUnits.Add(Unit);
+		}
+	}
+
+	for (AStrategyUnit* Unit : InEnemyUnits)
+	{
+		if (IsValid(Unit))
+		{
+			EnemyUnits.Add(Unit);
+		}
+	}
 
 	for (AStrategyUnit* Unit : PlayerUnits)
 	{

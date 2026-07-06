@@ -7,8 +7,10 @@
 #include "Components/TextRenderComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GridManager.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "ZombieGame.h"
 
@@ -42,6 +44,30 @@ AGridHighlightActor::AGridHighlightActor()
 	if (FallbackMaterialFinder.Succeeded())
 	{
 		CoverFallbackMaterial = FallbackMaterialFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ReachableMaterialFinder(TEXT("/Game/UI/Material/M_Reachable.M_Reachable"));
+	if (ReachableMaterialFinder.Succeeded())
+	{
+		ReachableDecalMaterial = ReachableMaterialFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OverwatchMaterialFinder(TEXT("/Game/UI/Material/M_Overwatch.M_Overwatch"));
+	if (OverwatchMaterialFinder.Succeeded())
+	{
+		OverwatchDecalMaterial = OverwatchMaterialFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> HalfCoverMaterialFinder(TEXT("/Game/UI/Material/M_HalfCoverShield1.M_HalfCoverShield1"));
+	if (HalfCoverMaterialFinder.Succeeded())
+	{
+		HalfCoverMaterial = HalfCoverMaterialFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FullCoverMaterialFinder(TEXT("/Game/UI/Material/M_FullCoverShield.M_FullCoverShield"));
+	if (FullCoverMaterialFinder.Succeeded())
+	{
+		FullCoverMaterial = FullCoverMaterialFinder.Object;
 	}
 
 	OverwatchBoundaryLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("OverwatchBoundaryLines"));

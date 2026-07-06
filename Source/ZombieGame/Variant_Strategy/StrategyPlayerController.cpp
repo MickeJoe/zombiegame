@@ -72,14 +72,6 @@ AStrategyPlayerController::AStrategyPlayerController()
 	// mouse cursor should always be shown
 	bShowMouseCursor = true;
 
-	GridManager = Cast<AGridManager>(
-		UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass())
-	);
-
-	HighlightActor = Cast<AGridHighlightActor>(
-	UGameplayStatics::GetActorOfClass(this, AGridHighlightActor::StaticClass())
-	);
-	
 	TargetingComponent = CreateDefaultSubobject<UStrategyTargetingComponent>(
 		TEXT("TargetingComponent")
 	);
@@ -90,6 +82,20 @@ AStrategyPlayerController::AStrategyPlayerController()
 void AStrategyPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	GridManager = Cast<AGridManager>(
+		UGameplayStatics::GetActorOfClass(this, AGridManager::StaticClass()));
+	HighlightActor = Cast<AGridHighlightActor>(
+		UGameplayStatics::GetActorOfClass(this, AGridHighlightActor::StaticClass()));
+
+	if (!GridManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("StrategyPlayerController: no GridManager found in level"));
+	}
+	if (!HighlightActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("StrategyPlayerController: no GridHighlightActor found in level"));
+	}
 
 	EnsureTargetingComponent();
 
@@ -277,6 +283,7 @@ void AStrategyPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
 
+#if !UE_BUILD_SHIPPING
 	if (IsLocalController() && bEnableWeaponDebugMenu)
 	{
 		const bool bIsWeaponDebugHotkeyDown = IsInputKeyDown(EKeys::I);
@@ -286,6 +293,7 @@ void AStrategyPlayerController::PlayerTick(float DeltaTime)
 		}
 		bWasWeaponDebugHotkeyDown = bIsWeaponDebugHotkeyDown;
 	}
+#endif
 
 	if (bIsPlacingOverwatch)
 	{
@@ -363,12 +371,16 @@ void AStrategyPlayerController::MoveCamera(const FInputActionValue& Value)
 {
 	FVector2D InputVector = Value.Get<FVector2D>();
 
+	const FRotator CameraYawRotation = ControlledPawn
+		? FRotator(0.0f, ControlledPawn->GetActorRotation().Yaw, 0.0f)
+		: FRotator(0.0f, GetControlRotation().Yaw, 0.0f);
+
 	// get the forward input component vector
-	FRotator ForwardRot = GetControlRotation();
+	FRotator ForwardRot = CameraYawRotation;
 	ForwardRot.Pitch = 0.0f;
 
 	// get the right input component vector
-	FRotator RightRot = GetControlRotation();
+	FRotator RightRot = CameraYawRotation;
 	ForwardRot.Pitch = 0.0f;
 	ForwardRot.Roll = 0.0f;
 
@@ -382,6 +394,16 @@ void AStrategyPlayerController::MoveCamera(const FInputActionValue& Value)
 
 void AStrategyPlayerController::ZoomCamera(const FInputActionValue& Value)
 {
+	const float KeyboardRotationDirection =
+		(IsInputKeyDown(EKeys::E) ? 1.0f : 0.0f) -
+		(IsInputKeyDown(EKeys::Q) ? 1.0f : 0.0f);
+
+	if (!FMath::IsNearlyZero(KeyboardRotationDirection))
+	{
+		RotateCamera(KeyboardRotationDirection);
+		return;
+	}
+
 	// scale the input and subtract from the current zoom level
 	float ZoomLevel = CameraZoom - (Value.Get<float>() * ZoomScaling);
 
@@ -391,6 +413,22 @@ void AStrategyPlayerController::ZoomCamera(const FInputActionValue& Value)
 	// update the pawn's camera
 	ControlledPawn->SetZoomModifier(CameraZoom);
 
+}
+
+void AStrategyPlayerController::RotateCamera(float Direction)
+{
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	const float DeltaSeconds = GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.0f;
+	const float DeltaYaw = Direction * CameraRotationSpeed * DeltaSeconds;
+	ControlledPawn->AddActorWorldRotation(FRotator(0.0f, DeltaYaw, 0.0f));
+
+	FRotator ControlRot = GetControlRotation();
+	ControlRot.Yaw = ControlledPawn->GetActorRotation().Yaw;
+	SetControlRotation(ControlRot);
 }
 
 void AStrategyPlayerController::ResetCamera(const FInputActionValue& Value)
@@ -3049,6 +3087,9 @@ void AStrategyPlayerController::UpdateWeaponInfoSlateWidget(AStrategyUnit* Selec
 
 void AStrategyPlayerController::ToggleWeaponDebugMenu()
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	if (!bEnableWeaponDebugMenu)
 	{
 		return;
@@ -3069,10 +3110,14 @@ void AStrategyPlayerController::ToggleWeaponDebugMenu()
 	{
 		ShowWeaponDebugMenu();
 	}
+#endif
 }
 
 void AStrategyPlayerController::ShowWeaponDebugMenu()
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	if (!bEnableWeaponDebugMenu)
 	{
 		return;
@@ -3084,6 +3129,7 @@ void AStrategyPlayerController::ShowWeaponDebugMenu()
 		UpdateWeaponDebugSlateWidget();
 		WeaponDebugSlateWidget->SetVisibility(EVisibility::Visible);
 	}
+#endif
 }
 
 void AStrategyPlayerController::HideWeaponDebugMenu()
@@ -3096,6 +3142,9 @@ void AStrategyPlayerController::HideWeaponDebugMenu()
 
 void AStrategyPlayerController::DebugEquipWeapon(FName ItemId)
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	UStrategyWeaponData* Weapon = FindDebugWeapon(ItemId);
 	if (!Weapon)
 	{
@@ -3104,10 +3153,23 @@ void AStrategyPlayerController::DebugEquipWeapon(FName ItemId)
 	}
 
 	HandleDebugWeaponPicked(Weapon);
+#endif
+}
+
+void AStrategyPlayerController::DebugOpenLevel(FName LevelPackageName)
+{
+#if UE_BUILD_SHIPPING
+	return;
+#else
+	HandleDebugLevelPicked(LevelPackageName);
+#endif
 }
 
 void AStrategyPlayerController::EnsureWeaponDebugSlateWidget()
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	if (WeaponDebugSlateWidget.IsValid() || !GEngine || !GEngine->GameViewport)
 	{
 		return;
@@ -3122,23 +3184,32 @@ void AStrategyPlayerController::EnsureWeaponDebugSlateWidget()
 		[
 			SAssignNew(WeaponDebugSlateWidget, SWeaponDebugSlateWidget)
 			.OnWeaponPicked(FOnDebugWeaponPicked::CreateUObject(this, &AStrategyPlayerController::HandleDebugWeaponPicked))
+			.OnLevelPicked(FOnDebugLevelPicked::CreateUObject(this, &AStrategyPlayerController::HandleDebugLevelPicked))
 		],
 		6000);
 
 	WeaponDebugSlateWidget->SetVisibility(EVisibility::Collapsed);
 	UpdateWeaponDebugSlateWidget();
+#endif
 }
 
 void AStrategyPlayerController::UpdateWeaponDebugSlateWidget()
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	if (WeaponDebugSlateWidget.IsValid())
 	{
-		WeaponDebugSlateWidget->SetContext(GetWeaponDebugTargetUnits(), GetDebugWeapons());
+		WeaponDebugSlateWidget->SetContext(GetWeaponDebugTargetUnits(), GetDebugWeapons(), GetDebugLevels());
 	}
+#endif
 }
 
 void AStrategyPlayerController::HandleDebugWeaponPicked(UStrategyWeaponData* WeaponData)
 {
+#if UE_BUILD_SHIPPING
+	return;
+#else
 	const TArray<AStrategyUnit*> Units = GetWeaponDebugTargetUnits();
 	if (Units.Num() == 0)
 	{
@@ -3168,6 +3239,35 @@ void AStrategyPlayerController::HandleDebugWeaponPicked(UStrategyWeaponData* Wea
 	UE_LOG(LogTemp, Warning, TEXT("Weapon debug %s on %d unit(s)"),
 		WeaponData ? *FString::Printf(TEXT("equipped %s"), *GetNameSafe(WeaponData)) : TEXT("cleared weapons"),
 		Units.Num());
+#endif
+}
+
+void AStrategyPlayerController::HandleDebugLevelPicked(FName LevelPackageName)
+{
+#if UE_BUILD_SHIPPING
+	return;
+#else
+	if (!IsDebugLevelAllowed(LevelPackageName))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DebugOpenLevel ignored: '%s' is not in the debug level allowlist"), *LevelPackageName.ToString());
+		return;
+	}
+
+	HideWeaponDebugMenu();
+	UE_LOG(LogTemp, Warning, TEXT("Debug opening level: %s"), *LevelPackageName.ToString());
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const FName LevelToOpen = LevelPackageName;
+	World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this, LevelToOpen]()
+	{
+		UGameplayStatics::OpenLevel(this, LevelToOpen);
+	}));
+#endif
 }
 
 TArray<AStrategyUnit*> AStrategyPlayerController::GetWeaponDebugTargetUnits() const
@@ -3262,6 +3362,45 @@ TArray<UStrategyWeaponData*> AStrategyPlayerController::GetDebugWeapons() const
 	});
 
 	return Weapons;
+}
+
+TArray<FDebugLevelEntry> AStrategyPlayerController::GetDebugLevels() const
+{
+	TArray<FDebugLevelEntry> Levels;
+
+#if !UE_BUILD_SHIPPING
+	Levels.Emplace(
+		FName(TEXT("/Game/TopDown/Lvl_TopDown")),
+		NSLOCTEXT("WeaponDebug", "OriginalTopDownLevel", "Original UE TopDown Level"));
+	Levels.Emplace(
+		FName(TEXT("/Game/Variant_Strategy/LVL_Strategy")),
+		NSLOCTEXT("WeaponDebug", "StrategyPrototypeLevel", "Strategy Prototype Level"));
+	Levels.Emplace(
+		FName(TEXT("/Game/Variant_Strategy/LVL_CoastalUtilityRefined")),
+		NSLOCTEXT("WeaponDebug", "CoastalUtilityRefinedLevel", "Coastal Utility Refined"));
+	Levels.Emplace(
+		FName(TEXT("/Game/Variant_Strategy/LVL_CoastalCache")),
+		NSLOCTEXT("WeaponDebug", "CoastalCacheLevel", "Coastal Cache Test Level"));
+#endif
+
+	return Levels;
+}
+
+bool AStrategyPlayerController::IsDebugLevelAllowed(FName LevelPackageName) const
+{
+#if UE_BUILD_SHIPPING
+	return false;
+#else
+	for (const FDebugLevelEntry& Level : GetDebugLevels())
+	{
+		if (Level.PackageName == LevelPackageName)
+		{
+			return true;
+		}
+	}
+
+	return false;
+#endif
 }
 
 UStrategyWeaponData* AStrategyPlayerController::FindDebugWeapon(FName ItemId) const

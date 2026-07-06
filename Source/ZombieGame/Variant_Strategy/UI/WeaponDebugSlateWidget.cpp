@@ -13,6 +13,7 @@
 void SWeaponDebugSlateWidget::Construct(const FArguments& InArgs)
 {
 	OnWeaponPicked = InArgs._OnWeaponPicked;
+	OnLevelPicked = InArgs._OnLevelPicked;
 
 	ChildSlot
 	[
@@ -47,14 +48,37 @@ void SWeaponDebugSlateWidget::Construct(const FArguments& InArgs)
 						SAssignNew(WeaponListBox, SVerticalBox)
 					]
 				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0.0f, 10.0f, 0.0f, 8.0f)
+				[
+					SNew(SSeparator)
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0.0f, 0.0f, 0.0f, 6.0f)
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("WeaponDebug", "LevelsTitle", "Levels"))
+					.ColorAndOpacity(FLinearColor(1.0f, 0.82f, 0.38f, 1.0f))
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SAssignNew(LevelListBox, SVerticalBox)
+				]
 			]
 		]
 	];
 
 	RebuildWeaponList();
+	RebuildLevelList();
 }
 
-void SWeaponDebugSlateWidget::SetContext(const TArray<AStrategyUnit*>& InUnits, const TArray<UStrategyWeaponData*>& InWeapons)
+void SWeaponDebugSlateWidget::SetContext(
+	const TArray<AStrategyUnit*>& InUnits,
+	const TArray<UStrategyWeaponData*>& InWeapons,
+	const TArray<FDebugLevelEntry>& InLevels)
 {
 	Units.Reset();
 	for (AStrategyUnit* Unit : InUnits)
@@ -74,7 +98,10 @@ void SWeaponDebugSlateWidget::SetContext(const TArray<AStrategyUnit*>& InUnits, 
 		}
 	}
 
+	Levels = InLevels;
+
 	RebuildWeaponList();
+	RebuildLevelList();
 }
 
 FText SWeaponDebugSlateWidget::GetTitleText() const
@@ -96,6 +123,16 @@ FReply SWeaponDebugSlateWidget::HandleWeaponClicked(UStrategyWeaponData* Weapon)
 	if (OnWeaponPicked.IsBound())
 	{
 		OnWeaponPicked.Execute(Weapon);
+	}
+
+	return FReply::Handled();
+}
+
+FReply SWeaponDebugSlateWidget::HandleLevelClicked(FName LevelPackageName)
+{
+	if (OnLevelPicked.IsBound())
+	{
+		OnLevelPicked.Execute(LevelPackageName);
 	}
 
 	return FReply::Handled();
@@ -161,6 +198,48 @@ void SWeaponDebugSlateWidget::RebuildWeaponList()
 			[
 				SNew(STextBlock)
 				.Text(WeaponDetails)
+			]
+		];
+	}
+}
+
+void SWeaponDebugSlateWidget::RebuildLevelList()
+{
+	if (!LevelListBox.IsValid())
+	{
+		return;
+	}
+
+	LevelListBox->ClearChildren();
+
+	if (Levels.Num() == 0)
+	{
+		LevelListBox->AddSlot()
+		.AutoHeight()
+		.Padding(0.0f, 4.0f)
+		[
+			SNew(STextBlock)
+			.Text(NSLOCTEXT("WeaponDebug", "NoLevels", "No debug levels configured"))
+		];
+		return;
+	}
+
+	for (const FDebugLevelEntry& Level : Levels)
+	{
+		if (Level.PackageName.IsNone())
+		{
+			continue;
+		}
+
+		LevelListBox->AddSlot()
+		.AutoHeight()
+		.Padding(0.0f, 3.0f)
+		[
+			SNew(SButton)
+			.OnClicked(this, &SWeaponDebugSlateWidget::HandleLevelClicked, Level.PackageName)
+			[
+				SNew(STextBlock)
+				.Text(Level.DisplayName.IsEmpty() ? FText::FromName(Level.PackageName) : Level.DisplayName)
 			]
 		];
 	}

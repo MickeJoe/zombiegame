@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 
 #include "DrawDebugHelpers.h" // tmp
 
@@ -17,6 +20,24 @@ AFogOfWarActor::AFogOfWarActor()
 
 	FogMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	FogMesh->SetCanEverAffectNavigation(false);
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> FogTileMeshFinder(TEXT("/Engine/BasicShapes/Plane.Plane"));
+	if (FogTileMeshFinder.Succeeded())
+	{
+		FogTileMesh = FogTileMeshFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> UnexploredMaterialFinder(TEXT("/Game/UI/Material/M_Fog_Unexplored.M_Fog_Unexplored"));
+	if (UnexploredMaterialFinder.Succeeded())
+	{
+		UnexploredMaterial = UnexploredMaterialFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ExploredMaterialFinder(TEXT("/Game/UI/Material/M_Fog_Explored.M_Fog_Explored"));
+	if (ExploredMaterialFinder.Succeeded())
+	{
+		ExploredMaterial = ExploredMaterialFinder.Object;
+	}
 }
 
 void AFogOfWarActor::RefreshFog(
