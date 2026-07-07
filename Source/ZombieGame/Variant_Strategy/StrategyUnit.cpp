@@ -31,6 +31,9 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Components/ChildActorComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "Systems/GridHighlightActor.h"
 
 namespace
@@ -1249,7 +1252,53 @@ float AStrategyUnit::PlayWeaponAttackMontage(const FStrategyWeaponInstance& Weap
 		? Weapon.WeaponData->AttackType
 		: EStrategyWeaponAttackType::Melee;
 	UAnimMontage* Montage = ResolveWeaponAttackMontage(Weapon, FallbackAttackType, AttackMeshComponentName, MontageSection);
-	return PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("weapon attack"));
+	const float PlayedLength = PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("weapon attack"));
+	PlayWeaponMuzzleEffect(Weapon);
+	return PlayedLength;
+}
+
+void AStrategyUnit::PlayWeaponMuzzleEffect(const FStrategyWeaponInstance& Weapon)
+{
+	const UStrategyWeaponData* WeaponData = Weapon.WeaponData;
+	if (!WeaponData
+		|| WeaponData->AttackType != EStrategyWeaponAttackType::Fire
+		|| !WeaponData->FireMuzzleEffect)
+	{
+		return;
+	}
+
+	if (USkeletalMeshComponent* AttachMesh = FindWeaponMuzzleEffectMesh(WeaponData))
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAttached(
+			WeaponData->FireMuzzleEffect,
+			AttachMesh,
+			WeaponData->FireMuzzleSocketName,
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			EAttachLocation::SnapToTarget,
+			true,
+			true,
+			ENCPoolMethod::AutoRelease,
+			true);
+		return;
+	}
+
+	const FVector FallbackLocation =
+		GetActorLocation()
+		+ GetActorForwardVector() * WeaponData->FireMuzzleFallbackOffset.X
+		+ GetActorRightVector() * WeaponData->FireMuzzleFallbackOffset.Y
+		+ GetActorUpVector() * WeaponData->FireMuzzleFallbackOffset.Z;
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		this,
+		WeaponData->FireMuzzleEffect,
+		FallbackLocation,
+		GetActorRotation(),
+		FVector::OneVector,
+		true,
+		true,
+		ENCPoolMethod::AutoRelease,
+		true);
 }
 
 float AStrategyUnit::PlayMeleeAttackMontage()
@@ -1274,6 +1323,40 @@ float AStrategyUnit::PlayBiteAttackMontage()
 		AttackMeshComponentName,
 		MontageSection);
 	return PlayResolvedAttackMontage(Montage, AttackMeshComponentName, MontageSection, TEXT("bite attack"));
+}
+
+USkeletalMeshComponent* AStrategyUnit::FindWeaponMuzzleEffectMesh(const UStrategyWeaponData* WeaponData) const
+{
+	if (!WeaponData || WeaponData->FireMuzzleSocketName.IsNone())
+	{
+		return nullptr;
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+
+	if (!WeaponData->FireMuzzleMeshComponentName.IsNone())
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent
+				&& MeshComponent->GetFName() == WeaponData->FireMuzzleMeshComponentName
+				&& MeshComponent->DoesSocketExist(WeaponData->FireMuzzleSocketName))
+			{
+				return MeshComponent;
+			}
+		}
+	}
+
+	for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+	{
+		if (MeshComponent && MeshComponent->DoesSocketExist(WeaponData->FireMuzzleSocketName))
+		{
+			return MeshComponent;
+		}
+	}
+
+	return nullptr;
 }
 
 USkeletalMeshComponent* AStrategyUnit::FindMeleeWeaponAttachMesh() const

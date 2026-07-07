@@ -1,10 +1,13 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "AttackStats.h"
 #include "Data/Item/EquippableItemData.h"
 #include "Data/Weapon/AttackStats.h"
 
 #include "StrategyWeaponData.generated.h"
+
+class UNiagaraSystem;
 
 UENUM(BlueprintType)
 enum class EStrategyWeaponAttackType : uint8
@@ -34,4 +37,16 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bUsesAmmo = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX")
+	TObjectPtr<UNiagaraSystem> FireMuzzleEffect = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX")
+	FName FireMuzzleSocketName = TEXT("Muzzle");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX")
+	FName FireMuzzleMeshComponentName = TEXT("Body");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX")
+	FVector FireMuzzleFallbackOffset = FVector(90.0f, 0.0f, 90.0f);
 };

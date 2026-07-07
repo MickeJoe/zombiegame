@@ -28,6 +28,7 @@ class UUnitData;
 class UAnimMontage;
 class UEquippableItemData;
 class UMedicBagData;
+class UNiagaraSystem;
 enum class EGridCoverType : uint8;
 
 UENUM(BlueprintType)
@@ -159,6 +160,7 @@ public:
 	void StartWeaponAttackMode();
 	void FaceTargetForAttack(const AStrategyUnit* Target);
 	float PlayWeaponAttackMontage(const FStrategyWeaponInstance& Weapon);
+	void PlayWeaponMuzzleEffect(const FStrategyWeaponInstance& Weapon);
 	float PlayMeleeAttackMontage();
 	float PlayBiteAttackMontage();
 	bool CanReload() const;
@@ -342,6 +344,7 @@ private:
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
 	UAnimMontage* ResolveWeaponAttackMontage(const FStrategyWeaponInstance& Weapon, EStrategyWeaponAttackType FallbackAttackType, FName& OutMeshComponentName, FName& OutMontageSection) const;
 	float PlayResolvedAttackMontage(UAnimMontage* Montage, FName AttackMeshComponentName, FName MontageSection, const TCHAR* LogContext);
+	USkeletalMeshComponent* FindWeaponMuzzleEffectMesh(const UStrategyWeaponData* WeaponData) const;
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
 	void UpdateMeleeWeaponVisual();
 	void ConfigureVisualComponentsForTacticalMovement();

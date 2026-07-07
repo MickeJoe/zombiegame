@@ -26,6 +26,7 @@
 #include "Player/PlayerStrategySide.h"
 #include "Player/StrategySide.h"
 #include "Systems/GridManager.h"
+#include "Data/Item/MedicBagData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Data/Weapon/AttackStats.h"
 #include "Data/Weapon/StrategyWeaponDatabase.h"
@@ -2355,12 +2356,77 @@ void AStrategyPlayerController::UpdateShootTargetHoverIndicator()
 		&& SelectedUnit->GetEquippedMedicBag()
 		&& SelectedUnit->CanUseMedicBagOn(HoveredUnit))
 	{
-		if (HighlightActor && PendingMedicBagTarget != HoveredUnit)
+		if (HighlightActor)
 		{
 			HighlightActor->ShowHoveredFriendlyCell(
 				GridManager,
 				GridManager->WorldToGrid(HoveredUnit->GetActorLocation()));
+			HighlightActor->ClearHoveredEnemyCell();
 		}
+
+		const UMedicBagData* MedicBag = SelectedUnit->GetEquippedMedicBag();
+		const int32 RemainingTimeUnitsAfterHeal =
+			FMath::Max(SelectedUnit->GetRemainingTimeUnits() - (MedicBag ? MedicBag->TimeUnitCost : 0), 0);
+
+		FVector2D ScreenPos;
+		if (!UGameplayStatics::ProjectWorldToScreen(this, HoveredUnit->GetActorLocation(), ScreenPos))
+		{
+			ClearShootTargetHoverIndicator();
+			return;
+		}
+
+		ShootTargetHoverActionPointIconBrush = MakeShared<FSlateBrush>();
+		ShootTargetHoverActionPointIconBrush->ImageSize = ShootTargetHoverIconSize;
+		ShootTargetHoverActionPointIconBrush->DrawAs = ESlateBrushDrawType::Image;
+		ShootTargetHoverActionPointIconBrush->SetResourceObject(ShootTargetHoverActionPointIcon);
+
+		const FString TimeUnitText = FString::Printf(TEXT("%d"), RemainingTimeUnitsAfterHeal);
+		const float WidgetWidth = 58.0f;
+		const float WidgetHeight = 30.0f;
+
+		if (ShootTargetHoverSlateWidget.IsValid())
+		{
+			GEngine->GameViewport->RemoveViewportWidgetContent(ShootTargetHoverSlateWidget.ToSharedRef());
+		}
+
+		ShootTargetHoverSlateWidget =
+			SNew(SConstraintCanvas)
+			+ SConstraintCanvas::Slot()
+			.Anchors(FAnchors(0.0f, 0.0f))
+			.Alignment(FVector2D(0.5f, 1.0f))
+			.Offset(FMargin(ScreenPos.X, ScreenPos.Y - 92.0f, WidgetWidth, WidgetHeight))
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(FMargin(0.0f, 0.0f, 4.0f, 0.0f))
+				[
+					SNew(SBox)
+					.WidthOverride(ShootTargetHoverIconSize.X)
+					.HeightOverride(ShootTargetHoverIconSize.Y)
+					[
+						SNew(SImage)
+						.Image(ShootTargetHoverActionPointIcon ? ShootTargetHoverActionPointIconBrush.Get() : FCoreStyle::Get().GetBrush(TEXT("Icons.Warning")))
+						.ColorAndOpacity(ShootTargetHoverActionPointIcon ? FLinearColor::White : FLinearColor(0.95f, 0.2f, 0.15f, 1.0f))
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(TimeUnitText))
+					.ColorAndOpacity(FSlateColor(FLinearColor(0.45f, 0.95f, 0.3f, 1.0f)))
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+					.ShadowOffset(FVector2D(1.0f, 1.0f))
+					.ShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.85f))
+				]
+			];
+
+		GEngine->GameViewport->AddViewportWidgetContent(ShootTargetHoverSlateWidget.ToSharedRef(), 1220);
+		LastShootTargetHoverUnit = HoveredUnit;
+		return;
 	}
 	else if (!PendingMedicBagTarget && HighlightActor)
 	{
@@ -2573,32 +2639,19 @@ bool AStrategyPlayerController::TrySelectOrUseMedicBag()
 		return false;
 	}
 
-	if (PendingMedicBagTarget == HoveredUnit)
+	const bool bUsed = SelectedUnit->UseMedicBagOn(HoveredUnit);
+	ClearPendingMedicBagTarget();
+
+	if (bUsed)
 	{
-		const bool bUsed = SelectedUnit->UseMedicBagOn(HoveredUnit);
-		ClearPendingMedicBagTarget();
-
-		if (bUsed)
-		{
-			RefreshActionBar();
-			RefreshPlayerUnitRoster();
-			RefreshWeaponInfoPanel();
-			RefreshShootableTargetIcons();
-			UpdateMovementHighlights();
-		}
-
-		return bUsed;
+		RefreshActionBar();
+		RefreshPlayerUnitRoster();
+		RefreshWeaponInfoPanel();
+		RefreshShootableTargetIcons();
+		UpdateMovementHighlights();
 	}
 
-	PendingMedicBagTarget = HoveredUnit;
-	if (HighlightActor)
-	{
-		HighlightActor->ShowHoveredFriendlyCell(
-			GridManager,
-			GridManager->WorldToGrid(HoveredUnit->GetActorLocation()));
-	}
-
-	return true;
+	return bUsed;
 }
 
 bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, AStrategyUnit* Target)
