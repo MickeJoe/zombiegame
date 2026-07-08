@@ -29,6 +29,7 @@ class UAnimMontage;
 class UEquippableItemData;
 class UMedicBagData;
 class UNiagaraSystem;
+struct FStrategyAttackResult;
 enum class EGridCoverType : uint8;
 
 UENUM(BlueprintType)
@@ -161,6 +162,7 @@ public:
 	void FaceTargetForAttack(const AStrategyUnit* Target);
 	float PlayWeaponAttackMontage(const FStrategyWeaponInstance& Weapon);
 	void PlayWeaponMuzzleEffect(const FStrategyWeaponInstance& Weapon);
+	void PlayWeaponProjectileVisual(const FStrategyWeaponInstance& Weapon, const AStrategyUnit* Target, const FStrategyAttackResult& Result);
 	float PlayMeleeAttackMontage();
 	float PlayBiteAttackMontage();
 	bool CanReload() const;
@@ -277,6 +279,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
 	TObjectPtr<UChildActorComponent> MeleeWeaponActorComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Equipment|Visuals")
+	TObjectPtr<UChildActorComponent> EquippedWeaponActorComponent;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Animation")
 	TObjectPtr<UAnimMontage> MeleeAttackMontage;
 
@@ -285,6 +290,9 @@ protected:
 
 	UPROPERTY(Transient)
 	FStrategyWeaponInstance EmptyWeaponInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveWeaponHoldPoseMontage;
 	
 	int32 UsedTimeUnits = 0;
 	int32 CurrentHealth = 0;
@@ -310,6 +318,8 @@ protected:
 	
 	FIntPoint LastGridCell;
 	bool bHasLastGridCell = false;
+	bool bInitializingDefaultEquipment = false;
+	int32 PendingWeaponHoldPoseRetries = 0;
 	
 	UPROPERTY(Transient)
 	AGridManager* GridManager;
@@ -344,9 +354,15 @@ private:
 	TArray<AStrategyUnit*> GetMeleeEnemiesInRange() const;
 	UAnimMontage* ResolveWeaponAttackMontage(const FStrategyWeaponInstance& Weapon, EStrategyWeaponAttackType FallbackAttackType, FName& OutMeshComponentName, FName& OutMontageSection) const;
 	float PlayResolvedAttackMontage(UAnimMontage* Montage, FName AttackMeshComponentName, FName MontageSection, const TCHAR* LogContext);
+	bool TryGetWeaponMuzzleTransform(const UStrategyWeaponData* WeaponData, FTransform& OutMuzzleTransform) const;
 	USkeletalMeshComponent* FindWeaponMuzzleEffectMesh(const UStrategyWeaponData* WeaponData) const;
 	USkeletalMeshComponent* FindMeleeWeaponAttachMesh() const;
+	USkeletalMeshComponent* FindEquippedWeaponAttachMesh(const UStrategyWeaponData* WeaponData) const;
 	void UpdateMeleeWeaponVisual();
+	void UpdateEquippedWeaponVisual();
+	void UpdateEquippedWeaponHoldPose();
+	void ScheduleEquippedWeaponHoldPoseUpdate(int32 RetryCount = 0, float DelaySeconds = 0.25f);
+	void StopWeaponHoldPose();
 	void ConfigureVisualComponentsForTacticalMovement();
 	void ApplyTargetingCameraSettings();
 	void ScheduleDeathRemoval(float DelaySeconds);

@@ -2682,8 +2682,9 @@ bool AStrategyPlayerController::TryExecuteDirectAttack(AStrategyUnit* Attacker, 
 		}
 
 		Attacker->FaceTargetForAttack(Target);
-		UStrategyAttackResolver::ResolveAndApply(Context);
+		const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
 		Attacker->PlayWeaponAttackMontage(ActiveWeapon);
+		Attacker->PlayWeaponProjectileVisual(ActiveWeapon, Target, Result);
 		Attacker->SpendWeaponAttackResources();
 		ClearShootTargetHoverIndicator();
 		RefreshActionBar();

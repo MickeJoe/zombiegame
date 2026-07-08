@@ -12,6 +12,7 @@
 #include "AIController.h"
 #include "StrategyGameMode.h"
 #include "StrategyPlayerController.h"
+#include "StrategyProjectileVisual.h"
 #include "Player/StrategySide.h"
 #include "Systems/AttackHandling/StrategyAttackResolver.h"
 #include "UI/TargetingUI/StrategyTargetingComponent.h"
@@ -30,8 +31,11 @@
 #include "Camera/CameraComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequenceBase.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/Engine.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "Systems/GridHighlightActor.h"
@@ -47,6 +51,20 @@ namespace
 	bool DoesWeaponMatchAttackType(const FStrategyWeaponInstance& Weapon, EStrategyWeaponAttackType AttackType)
 	{
 		return Weapon.WeaponData && Weapon.WeaponData->AttackType == AttackType;
+	}
+
+	void ShowProjectileDebugMessage(const UObject* WorldContext, const FString& Message, const FColor& Color = FColor::Yellow)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ProjectileDebug: %s"), *Message);
+
+		if (GEngine && WorldContext)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				5.0f,
+				Color,
+				FString::Printf(TEXT("ProjectileDebug: %s"), *Message));
+		}
 	}
 }
 
@@ -120,6 +138,9 @@ AStrategyUnit::AStrategyUnit()
 
 	MeleeWeaponActorComponent = CreateDefaultSubobject<UChildActorComponent>(TEXT("MeleeWeaponActor"));
 	MeleeWeaponActorComponent->SetupAttachment(GetRootComponent());
+
+	EquippedWeaponActorComponent = CreateDefaultSubobject<UChildActorComponent>(TEXT("EquippedWeaponActor"));
+	EquippedWeaponActorComponent->SetupAttachment(GetRootComponent());
 }
 
 void AStrategyUnit::OnConstruction(const FTransform& Transform)
@@ -130,6 +151,7 @@ void AStrategyUnit::OnConstruction(const FTransform& Transform)
 	ConfigureVisualComponentsForTacticalMovement();
 	RebuildEquippedWeaponInstances();
 	UpdateMeleeWeaponVisual();
+	UpdateEquippedWeaponVisual();
 }
 
 void AStrategyUnit::BeginPlay()
@@ -140,6 +162,7 @@ void AStrategyUnit::BeginPlay()
 	ConfigureVisualComponentsForTacticalMovement();
 	RebuildEquippedWeaponInstances();
 	UpdateMeleeWeaponVisual();
+	UpdateEquippedWeaponVisual();
 
 
 	if (UnitData && UnitData->StatusBarWidgetClass)
@@ -161,13 +184,15 @@ void AStrategyUnit::BeginPlay()
 		}
 	}
 
-	if (UnitData && UnitData->DefaultWeapon && !PrimaryItem && !SecondaryItem)
-	{
-		EquipWeapon(UnitData->DefaultWeapon);
-	}
-
 	if (UnitData)
 	{
+		bInitializingDefaultEquipment = true;
+
+		if (UnitData->DefaultWeapon && !PrimaryItem && !SecondaryItem)
+		{
+			EquipWeapon(UnitData->DefaultWeapon);
+		}
+
 		for (UStrategyWeaponData* DefaultWeapon : UnitData->DefaultWeapons)
 		{
 			if (DefaultWeapon
@@ -185,12 +210,16 @@ void AStrategyUnit::BeginPlay()
 				EquipItem(DefaultItem);
 			}
 		}
+
+		bInitializingDefaultEquipment = false;
 	}
 
 	CurrentHealth = GetMaxHealth();
 	CurrentArmor = GetMaxArmor();
 
 	UpdateStatusBar();
+
+	ScheduleEquippedWeaponHoldPoseUpdate(12, 0.25f);
 }
 
 void AStrategyUnit::NotifyControllerChanged()
@@ -269,6 +298,29 @@ void AStrategyUnit::FaceTargetForAttack(const AStrategyUnit* Target)
 	}
 
 	SetActorRotation(Direction.Rotation());
+}
+
+bool AStrategyUnit::TryGetWeaponMuzzleTransform(const UStrategyWeaponData* WeaponData, FTransform& OutMuzzleTransform) const
+{
+	if (!WeaponData)
+	{
+		return false;
+	}
+
+	if (USkeletalMeshComponent* AttachMesh = FindWeaponMuzzleEffectMesh(WeaponData))
+	{
+		OutMuzzleTransform = AttachMesh->GetSocketTransform(WeaponData->FireMuzzleSocketName, RTS_World);
+		return true;
+	}
+
+	const FVector FallbackLocation =
+		GetActorLocation()
+		+ GetActorForwardVector() * WeaponData->FireMuzzleFallbackOffset.X
+		+ GetActorRightVector() * WeaponData->FireMuzzleFallbackOffset.Y
+		+ GetActorUpVector() * WeaponData->FireMuzzleFallbackOffset.Z;
+
+	OutMuzzleTransform = FTransform(GetActorRotation(), FallbackLocation, FVector::OneVector);
+	return true;
 }
 
 bool AStrategyUnit::MoveToLocation(const FVector& Location, float AcceptanceRadius)
@@ -995,6 +1047,7 @@ bool AStrategyUnit::TryFireOverwatchAt(AStrategyUnit* Target)
 		UStrategyAttackResolver::MakeContextWithAttackStats(this, Target, AttackStats);
 	const FStrategyAttackResult Result = UStrategyAttackResolver::ResolveAndApply(Context);
 	PlayWeaponAttackMontage(*FireWeapon);
+	PlayWeaponProjectileVisual(*FireWeapon, Target, Result);
 
 	UE_LOG(LogTemp, Log, TEXT("Overwatch: %s fired at %s. Result=%s HitChance=%d Crit=%d Damage=%d ArmorPierce=%d ArmorShred=%d"),
 		*GetNameSafe(this),
@@ -1283,22 +1336,188 @@ void AStrategyUnit::PlayWeaponMuzzleEffect(const FStrategyWeaponInstance& Weapon
 		return;
 	}
 
-	const FVector FallbackLocation =
-		GetActorLocation()
-		+ GetActorForwardVector() * WeaponData->FireMuzzleFallbackOffset.X
-		+ GetActorRightVector() * WeaponData->FireMuzzleFallbackOffset.Y
-		+ GetActorUpVector() * WeaponData->FireMuzzleFallbackOffset.Z;
+	FTransform MuzzleTransform;
+	if (!TryGetWeaponMuzzleTransform(WeaponData, MuzzleTransform))
+	{
+		return;
+	}
 
 	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
 		this,
 		WeaponData->FireMuzzleEffect,
-		FallbackLocation,
-		GetActorRotation(),
+		MuzzleTransform.GetLocation(),
+		MuzzleTransform.GetRotation().Rotator(),
 		FVector::OneVector,
 		true,
 		true,
 		ENCPoolMethod::AutoRelease,
 		true);
+}
+
+void AStrategyUnit::PlayWeaponProjectileVisual(
+	const FStrategyWeaponInstance& Weapon,
+	const AStrategyUnit* Target,
+	const FStrategyAttackResult& Result)
+{
+	const UStrategyWeaponData* WeaponData = Weapon.WeaponData;
+	if (!WeaponData)
+	{
+		ShowProjectileDebugMessage(this, TEXT("No WeaponData; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	if (WeaponData->AttackType != EStrategyWeaponAttackType::Fire)
+	{
+		ShowProjectileDebugMessage(this, TEXT("Weapon is not Fire type; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	if (!IsValid(Target))
+	{
+		ShowProjectileDebugMessage(this, TEXT("Invalid target; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		ShowProjectileDebugMessage(this, TEXT("No world; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	UStaticMesh* ProjectileMesh = WeaponData->ProjectileMesh;
+	if (!ProjectileMesh)
+	{
+		ProjectileMesh = LoadObject<UStaticMesh>(
+			nullptr,
+			TEXT("/Game/fbx/Weapon/Bullets/Meshy_AI_Stylized_12_gauge_sho_0708075727_texture.Meshy_AI_Stylized_12_gauge_sho_0708075727_texture"));
+		if (ProjectileMesh)
+		{
+			ShowProjectileDebugMessage(
+				this,
+				FString::Printf(TEXT("Using temporary fallback projectile mesh %s."), *GetNameSafe(ProjectileMesh)),
+				FColor::Cyan);
+		}
+	}
+
+	if (!WeaponData->ProjectileVisualActorClass && !ProjectileMesh)
+	{
+		ShowProjectileDebugMessage(
+			this,
+			FString::Printf(
+				TEXT("No ProjectileMesh/ProjectileVisualActorClass on %s, and fallback mesh failed; projectile not spawned."),
+				*GetNameSafe(WeaponData)),
+			FColor::Red);
+		return;
+	}
+
+	FTransform MuzzleTransform;
+	if (!TryGetWeaponMuzzleTransform(WeaponData, MuzzleTransform))
+	{
+		ShowProjectileDebugMessage(this, TEXT("Could not resolve muzzle transform; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	const FVector StartLocation = MuzzleTransform.GetLocation();
+	const FVector TargetLocation = Target->GetActorLocation();
+	const float FallbackTargetHeight = Result.bCritical
+		? WeaponData->ProjectileCriticalHitHeight
+		: WeaponData->ProjectileChestHitHeight;
+	FVector EndLocation = TargetLocation + FVector(0.0f, 0.0f, FallbackTargetHeight);
+	if (const UCapsuleComponent* TargetCapsule = Target->GetCapsuleComponent())
+	{
+		const float HalfHeight = TargetCapsule->GetScaledCapsuleHalfHeight();
+		const float BottomZ = TargetCapsule->GetComponentLocation().Z - HalfHeight;
+		const float BodyHeightAlpha = Result.bCritical ? 1.72f : 1.18f;
+		EndLocation.Z = BottomZ + HalfHeight * BodyHeightAlpha;
+	}
+
+	if (!Result.bHit)
+	{
+		FVector ShotDirection = TargetLocation - StartLocation;
+		if (ShotDirection.IsNearlyZero())
+		{
+			ShotDirection = GetActorForwardVector();
+		}
+		ShotDirection.Normalize();
+
+		FVector MissSide = FVector::CrossProduct(FVector::UpVector, ShotDirection);
+		if (MissSide.IsNearlyZero())
+		{
+			MissSide = GetActorRightVector();
+		}
+		MissSide.Normalize();
+
+		const float SideSign = FMath::RandBool() ? 1.0f : -1.0f;
+		EndLocation += MissSide * WeaponData->ProjectileMissLateralOffset * SideSign;
+		EndLocation += ShotDirection * WeaponData->ProjectileMissPastTargetDistance;
+	}
+
+	const FVector TravelVector = EndLocation - StartLocation;
+	if (TravelVector.IsNearlyZero())
+	{
+		ShowProjectileDebugMessage(this, TEXT("Start and end are identical; projectile not spawned."), FColor::Red);
+		return;
+	}
+
+	const FString ResultText = Result.bHit
+		? (Result.bCritical ? TEXT("CRIT") : TEXT("HIT"))
+		: TEXT("MISS");
+	ShowProjectileDebugMessage(
+		this,
+		FString::Printf(
+			TEXT("%s %s -> %s Mesh=%s Scale=%s"),
+			*ResultText,
+			*StartLocation.ToCompactString(),
+			*EndLocation.ToCompactString(),
+			*GetNameSafe(ProjectileMesh),
+			*WeaponData->ProjectileMeshRelativeScale.ToCompactString()),
+		Result.bHit ? FColor::Green : FColor::Orange);
+
+	DrawDebugLine(World, StartLocation, EndLocation, FColor::Cyan, false, 5.0f, 0, 8.0f);
+	DrawDebugSphere(World, StartLocation, 22.0f, 12, FColor::Green, false, 5.0f, 0, 3.0f);
+	DrawDebugSphere(World, EndLocation, 32.0f, 12, Result.bHit ? FColor::Red : FColor::Orange, false, 5.0f, 0, 4.0f);
+
+	TSubclassOf<AActor> ProjectileClass = WeaponData->ProjectileVisualActorClass;
+	if (!ProjectileClass)
+	{
+		ProjectileClass = AStrategyProjectileVisual::StaticClass();
+	}
+
+	AActor* SpawnedActor = World->SpawnActor<AActor>(
+		ProjectileClass,
+		StartLocation,
+		TravelVector.Rotation());
+	AStrategyProjectileVisual* ProjectileVisual = Cast<AStrategyProjectileVisual>(SpawnedActor);
+	if (!ProjectileVisual)
+	{
+		if (SpawnedActor)
+		{
+			SpawnedActor->SetLifeSpan(WeaponData->ProjectileLifeSeconds);
+			ShowProjectileDebugMessage(
+				this,
+				FString::Printf(TEXT("Spawned non-StrategyProjectileVisual actor %s; movement initializer skipped."), *GetNameSafe(SpawnedActor)),
+				FColor::Yellow);
+		}
+		else
+		{
+			ShowProjectileDebugMessage(this, TEXT("SpawnActor returned null; projectile failed to spawn."), FColor::Red);
+		}
+		return;
+	}
+
+	ProjectileVisual->InitializeProjectile(
+		ProjectileMesh,
+		StartLocation,
+		EndLocation,
+		WeaponData->ProjectileSpeed,
+		WeaponData->ProjectileLifeSeconds,
+		WeaponData->ProjectileMeshRelativeRotation,
+		WeaponData->ProjectileMeshRelativeScale);
+	ShowProjectileDebugMessage(
+		this,
+		FString::Printf(TEXT("Spawned projectile actor %s."), *GetNameSafe(ProjectileVisual)),
+		FColor::Green);
 }
 
 float AStrategyUnit::PlayMeleeAttackMontage()
@@ -1388,6 +1607,43 @@ USkeletalMeshComponent* AStrategyUnit::FindMeleeWeaponAttachMesh() const
 	return GetMesh();
 }
 
+USkeletalMeshComponent* AStrategyUnit::FindEquippedWeaponAttachMesh(const UStrategyWeaponData* WeaponData) const
+{
+	if (!WeaponData)
+	{
+		return GetMesh();
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+
+	if (!WeaponData->EquippedAttachMeshComponentName.IsNone())
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent
+				&& MeshComponent->GetFName() == WeaponData->EquippedAttachMeshComponentName
+				&& (WeaponData->EquippedAttachSocketName.IsNone()
+					|| MeshComponent->DoesSocketExist(WeaponData->EquippedAttachSocketName)))
+			{
+				return MeshComponent;
+			}
+		}
+	}
+
+	for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+	{
+		if (MeshComponent
+			&& !WeaponData->EquippedAttachSocketName.IsNone()
+			&& MeshComponent->DoesSocketExist(WeaponData->EquippedAttachSocketName))
+		{
+			return MeshComponent;
+		}
+	}
+
+	return GetMesh();
+}
+
 void AStrategyUnit::UpdateMeleeWeaponVisual()
 {
 	if (!MeleeWeaponActorComponent)
@@ -1407,6 +1663,207 @@ void AStrategyUnit::UpdateMeleeWeaponVisual()
 		AttachMesh,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		MeleeWeaponSocketName);
+}
+
+void AStrategyUnit::UpdateEquippedWeaponVisual()
+{
+	if (!EquippedWeaponActorComponent)
+	{
+		return;
+	}
+
+	const FStrategyWeaponInstance& EquippedWeapon = GetEquippedWeapon();
+	const UStrategyWeaponData* WeaponData = EquippedWeapon.WeaponData;
+	const TSubclassOf<AActor> EquippedActorClass = WeaponData ? WeaponData->EquippedActorClass : nullptr;
+
+	EquippedWeaponActorComponent->SetChildActorClass(EquippedActorClass);
+	EquippedWeaponActorComponent->SetVisibility(EquippedActorClass != nullptr, true);
+	EquippedWeaponActorComponent->SetHiddenInGame(EquippedActorClass == nullptr, true);
+
+	if (!WeaponData || !EquippedActorClass)
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* AttachMesh = FindEquippedWeaponAttachMesh(WeaponData);
+	if (!AttachMesh)
+	{
+		return;
+	}
+
+	EquippedWeaponActorComponent->AttachToComponent(
+		AttachMesh,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+		WeaponData->EquippedAttachSocketName);
+	EquippedWeaponActorComponent->SetRelativeTransform(WeaponData->EquippedAttachOffset);
+}
+
+void AStrategyUnit::StopWeaponHoldPose()
+{
+	if (!ActiveWeaponHoldPoseMontage)
+	{
+		return;
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+	for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+	{
+		UAnimInstance* AnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
+		if (AnimInstance && AnimInstance->Montage_IsPlaying(ActiveWeaponHoldPoseMontage))
+		{
+			AnimInstance->Montage_Stop(0.15f, ActiveWeaponHoldPoseMontage);
+		}
+	}
+
+	ActiveWeaponHoldPoseMontage = nullptr;
+}
+
+void AStrategyUnit::ScheduleEquippedWeaponHoldPoseUpdate(int32 RetryCount, float DelaySeconds)
+{
+	PendingWeaponHoldPoseRetries = FMath::Max(PendingWeaponHoldPoseRetries, RetryCount);
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FTimerHandle WeaponHoldPoseTimerHandle;
+	World->GetTimerManager().SetTimer(
+		WeaponHoldPoseTimerHandle,
+		FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			UpdateEquippedWeaponVisual();
+			UpdateEquippedWeaponHoldPose();
+		}),
+		FMath::Max(DelaySeconds, 0.0f),
+		false);
+}
+
+void AStrategyUnit::UpdateEquippedWeaponHoldPose()
+{
+	StopWeaponHoldPose();
+
+	const FStrategyWeaponInstance& EquippedWeapon = GetEquippedWeapon();
+	const UStrategyWeaponData* WeaponData = EquippedWeapon.WeaponData;
+	if (!WeaponData)
+	{
+		return;
+	}
+
+	if (WeaponData->EquippedHoldPoseMontage)
+	{
+		const float PlayedLength = PlayResolvedAttackMontage(
+			WeaponData->EquippedHoldPoseMontage,
+			WeaponData->EquippedHoldPoseMeshComponentName,
+			WeaponData->EquippedHoldPoseSection,
+			TEXT("weapon hold pose"));
+		if (PlayedLength > 0.0f)
+		{
+			ActiveWeaponHoldPoseMontage = WeaponData->EquippedHoldPoseMontage;
+		}
+		return;
+	}
+
+	if (!WeaponData->EquippedHoldPoseAnimation)
+	{
+		return;
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	GetComponents(SkeletalMeshComponents);
+
+	USkeletalMeshComponent* CharacterMesh = nullptr;
+	USkeletalMeshComponent* FallbackMesh = nullptr;
+	UAnimInstance* AnimInstance = nullptr;
+
+	if (!WeaponData->EquippedHoldPoseMeshComponentName.IsNone())
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (MeshComponent && MeshComponent->GetFName() == WeaponData->EquippedHoldPoseMeshComponentName)
+			{
+				CharacterMesh = MeshComponent;
+				FallbackMesh = MeshComponent;
+				AnimInstance = MeshComponent->GetAnimInstance();
+				break;
+			}
+		}
+	}
+
+	if (!AnimInstance)
+	{
+		for (USkeletalMeshComponent* MeshComponent : SkeletalMeshComponents)
+		{
+			if (!FallbackMesh && MeshComponent)
+			{
+				FallbackMesh = MeshComponent;
+			}
+
+			if (MeshComponent && MeshComponent->GetAnimInstance())
+			{
+				CharacterMesh = MeshComponent;
+				AnimInstance = MeshComponent->GetAnimInstance();
+				break;
+			}
+		}
+	}
+
+	if (!AnimInstance)
+	{
+		if (PendingWeaponHoldPoseRetries > 0)
+		{
+			--PendingWeaponHoldPoseRetries;
+			ScheduleEquippedWeaponHoldPoseUpdate(0, 0.25f);
+		}
+		else
+		{
+			if (FallbackMesh)
+			{
+				FallbackMesh->PlayAnimation(WeaponData->EquippedHoldPoseAnimation, true);
+				PendingWeaponHoldPoseRetries = 0;
+				UE_LOG(LogTemp, Log, TEXT("Playing weapon hold pose animation %s on %s using single-node mesh %s"),
+					*GetNameSafe(WeaponData->EquippedHoldPoseAnimation),
+					*GetName(),
+					*GetNameSafe(FallbackMesh));
+				return;
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("Cannot play weapon hold pose animation for %s. RequestedMesh=%s Animation=%s"),
+				*GetName(),
+				*WeaponData->EquippedHoldPoseMeshComponentName.ToString(),
+				*GetNameSafe(WeaponData->EquippedHoldPoseAnimation));
+		}
+		return;
+	}
+
+	const FName SlotName = WeaponData->EquippedHoldPoseSlotName.IsNone()
+		? FName(TEXT("DefaultSlot"))
+		: WeaponData->EquippedHoldPoseSlotName;
+	UAnimMontage* DynamicMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
+		WeaponData->EquippedHoldPoseAnimation,
+		SlotName,
+		0.15f,
+		0.15f,
+		1.0f,
+		0);
+	if (DynamicMontage)
+	{
+		ActiveWeaponHoldPoseMontage = DynamicMontage;
+		PendingWeaponHoldPoseRetries = 0;
+		UE_LOG(LogTemp, Log, TEXT("Playing weapon hold pose animation %s on %s using mesh %s"),
+			*GetNameSafe(WeaponData->EquippedHoldPoseAnimation),
+			*GetName(),
+			*GetNameSafe(CharacterMesh));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to play weapon hold pose animation %s on %s using slot %s"),
+			*GetNameSafe(WeaponData->EquippedHoldPoseAnimation),
+			*GetName(),
+			*SlotName.ToString());
+	}
 }
 
 void AStrategyUnit::ConfigureVisualComponentsForTacticalMovement()
@@ -1612,6 +2069,12 @@ void AStrategyUnit::EquipItem(UEquippableItemData* ItemData)
 	{
 		WeaponSlot->Init(WeaponData);
 	}
+
+	UpdateEquippedWeaponVisual();
+	if (!bInitializingDefaultEquipment)
+	{
+		ScheduleEquippedWeaponHoldPoseUpdate(4, 0.05f);
+	}
 }
 
 void AStrategyUnit::RebuildEquippedWeaponInstances()
@@ -1637,15 +2100,19 @@ void AStrategyUnit::EquipWeapon(UStrategyWeaponData* WeaponData)
 
 void AStrategyUnit::ClearEquippedWeapons()
 {
+	StopWeaponHoldPose();
 	PrimaryItem = nullptr;
 	SecondaryItem = nullptr;
 	PrimaryWeapon = FStrategyWeaponInstance();
 	SecondaryWeapon = FStrategyWeaponInstance();
+	UpdateEquippedWeaponVisual();
 }
 
 void AStrategyUnit::SetActiveWeaponSlot(EEquippableItemSlot WeaponSlot)
 {
 	ActiveWeaponSlot = WeaponSlot;
+	UpdateEquippedWeaponVisual();
+	ScheduleEquippedWeaponHoldPoseUpdate(4, 0.05f);
 }
 
 const FStrategyWeaponInstance& AStrategyUnit::GetEquippedWeapon() const

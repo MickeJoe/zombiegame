@@ -289,7 +289,9 @@ void UStrategyTargetingComponent::HandleFireClicked()
 	}
 	else
 	{
-		Attacker->PlayWeaponAttackMontage(Attacker->GetEquippedFireWeapon());
+		const FStrategyWeaponInstance& FireWeapon = Attacker->GetEquippedFireWeapon();
+		Attacker->PlayWeaponAttackMontage(FireWeapon);
+		Attacker->PlayWeaponProjectileVisual(FireWeapon, Target, Result);
 		Attacker->SpendWeaponAttackResources();
 	}
 
